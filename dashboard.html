@@ -1,891 +1,681 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Claimflow — Intelligent Billing Platform</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #050c14;
-    --surface: #0a1628;
-    --surface2: #0f1f38;
-    --border: #1a3050;
-    --accent: #00d4ff;
-    --accent2: #00ff88;
-    --accent3: #ff6b35;
-    --warn: #ffb800;
-    --danger: #ff4444;
-    --text: #e8f4ff;
-    --text2: #7a9bbf;
-    --text3: #3d5a7a;
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  /* Background grid */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* Glow orbs */
-  body::after {
-    content: '';
-    position: fixed;
-    top: -200px;
-    right: -200px;
-    width: 600px;
-    height: 600px;
-    background: radial-gradient(circle, rgba(0,212,255,0.06) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* HEADER */
-  header {
-    position: relative;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 40px;
-    border-bottom: 1px solid var(--border);
-    background: rgba(5,12,20,0.9);
-    backdrop-filter: blur(20px);
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .logo-icon {
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, var(--accent), var(--accent2));
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-  }
-
-  .logo-text {
-    font-family: Verdana, sans-serif;
-    font-weight: 800;
-    font-size: 20px;
-    letter-spacing: -0.5px;
-  }
-
-  .logo-text span { color: var(--accent); }
-
-  .header-badge {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--accent2);
-    background: rgba(0,255,136,0.08);
-    border: 1px solid rgba(0,255,136,0.2);
-    padding: 4px 10px;
-    border-radius: 20px;
-    letter-spacing: 1px;
-  }
-
-  /* MAIN LAYOUT */
-  .container {
-    position: relative;
-    z-index: 1;
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 32px 40px;
-  }
-
-  /* TABS */
-  .tabs {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 32px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 4px;
-    width: fit-content;
-  }
-
-  .tab {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    padding: 8px 20px;
-    border-radius: 8px;
-    border: none;
-    background: transparent;
-    color: var(--text2);
-    cursor: pointer;
-    transition: all 0.2s;
-    letter-spacing: 0.3px;
-  }
-
-  .tab.active {
-    background: var(--accent);
-    color: var(--bg);
-    font-weight: 600;
-  }
-
-  .tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
-
-  /* STATS ROW */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 16px;
-    margin-bottom: 32px;
-  }
-
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    transition: border-color 0.2s;
-  }
-
-  .stat-card:hover { border-color: var(--accent); }
-
-  .stat-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 8px;
-  }
-
-  .stat-value {
-    font-family: Verdana, sans-serif;
-    font-size: 32px;
-    font-weight: 800;
-    line-height: 1;
-  }
-
-  .stat-value.blue { color: var(--accent); }
-  .stat-value.green { color: var(--accent2); }
-  .stat-value.orange { color: var(--accent3); }
-  .stat-value.red { color: var(--danger); }
-  .stat-value.yellow { color: var(--warn); }
-
-  /* PANELS */
-  .panel {
-    display: none;
-  }
-  .panel.active { display: block; }
-
-  /* FORM PANEL */
-  .form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 24px;
-  }
-
-  .form-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 28px;
-  }
-
-  .form-card h2 {
-    font-family: Verdana, sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-    margin-bottom: 6px;
-    color: var(--text);
-  }
-
-  .form-card p {
-    font-size: 13px;
-    color: var(--text2);
-    margin-bottom: 24px;
-    line-height: 1.5;
-  }
-
-  .field {
-    margin-bottom: 16px;
-  }
-
-  label {
-    display: block;
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--text2);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 6px;
-  }
-
-  input, select, textarea {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    padding: 10px 14px;
-    outline: none;
-    transition: border-color 0.2s;
-  }
-
-  input:focus, select:focus, textarea:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(0,212,255,0.08);
-  }
-
-  textarea {
-    resize: vertical;
-    min-height: 180px;
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    line-height: 1.6;
-  }
-
-  select option { background: var(--surface2); }
-
-  .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 24px;
-    border-radius: 8px;
-    border: none;
-    font-family: Verdana, sans-serif;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: all 0.2s;
-    letter-spacing: 0.3px;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: var(--bg);
-    width: 100%;
-    justify-content: center;
-  }
-
-  .btn-primary:hover {
-    background: #22e0ff;
-    transform: translateY(-1px);
-    box-shadow: 0 8px 24px rgba(0,212,255,0.25);
-  }
-
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none;
-  }
-
-  .btn-danger {
-    background: rgba(255,68,68,0.1);
-    color: var(--danger);
-    border: 1px solid rgba(255,68,68,0.3);
-    font-size: 12px;
-    padding: 6px 14px;
-  }
-
-  .btn-danger:hover { background: rgba(255,68,68,0.2); }
-
-  /* RESULTS */
-  .result-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 20px;
-    margin-top: 16px;
-  }
-
-  .result-title {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 12px;
-  }
-
-  .code-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
-
-  .code-badge {
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-weight: 500;
-  }
-
-  .code-badge.icd { background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.2); }
-  .code-badge.cpt { background: rgba(0,255,136,0.1); color: var(--accent2); border: 1px solid rgba(0,255,136,0.2); }
-  .code-badge.auth { background: rgba(255,107,53,0.1); color: var(--accent3); border: 1px solid rgba(255,107,53,0.3); }
-  .code-badge.ok { background: rgba(0,255,136,0.08); color: var(--accent2); border: 1px solid rgba(0,255,136,0.15); }
-
-  /* CLAIMS TABLE */
-  .table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    overflow: hidden;
-  }
-
-  .table-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .table-header h2 {
-    font-family: Verdana, sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-  }
-
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 13px;
-  }
-
-  th {
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--text3);
-    padding: 12px 16px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    background: rgba(0,0,0,0.2);
-  }
-
-  td {
-    padding: 14px 16px;
-    border-bottom: 1px solid rgba(26,48,80,0.5);
-    color: var(--text2);
-    vertical-align: middle;
-  }
-
-  tr:hover td { background: rgba(0,212,255,0.02); }
-  tr:last-child td { border-bottom: none; }
-
-  .status-badge {
-    display: inline-block;
-    font-family: 'DM Mono', monospace;
-    font-size: 10px;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 4px;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-  }
-
-  .status-submitted { background: rgba(0,212,255,0.1); color: var(--accent); }
-  .status-approved { background: rgba(0,255,136,0.1); color: var(--accent2); }
-  .status-denied { background: rgba(255,68,68,0.1); color: var(--danger); }
-  .status-pending { background: rgba(255,184,0,0.1); color: var(--warn); }
-
-  /* LOADING */
-  .loading {
-    display: none;
-    align-items: center;
-    gap: 10px;
-    color: var(--accent);
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    margin-top: 12px;
-  }
-
-  .loading.show { display: flex; }
-
-  .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid rgba(0,212,255,0.2);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* APPEAL MODAL */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.8);
-    backdrop-filter: blur(8px);
-    z-index: 100;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .modal-overlay.show { display: flex; }
-
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    width: 90%;
-    max-width: 700px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .modal-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .modal-head h3 {
-    font-family: Verdana, sans-serif;
-    font-size: 16px;
-    font-weight: 700;
-  }
-
-  .modal-body {
-    padding: 24px;
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  .modal-body pre {
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    line-height: 1.8;
-    color: var(--text2);
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
-
-  .close-btn {
-    background: none;
-    border: none;
-    color: var(--text2);
-    font-size: 20px;
-    cursor: pointer;
-    padding: 4px;
-    line-height: 1;
-  }
-
-  .close-btn:hover { color: var(--text); }
-
-  /* EMPTY STATE */
-  .empty {
-    text-align: center;
-    padding: 60px 20px;
-    color: var(--text3);
-  }
-
-  .empty-icon { font-size: 48px; margin-bottom: 16px; }
-  .empty p { font-size: 14px; }
-
-  /* DENIAL FORM */
-  .denial-form {
-    display: none;
-    margin-top: 12px;
-    padding: 16px;
-    background: rgba(255,68,68,0.05);
-    border: 1px solid rgba(255,68,68,0.2);
-    border-radius: 8px;
-  }
-
-  .denial-form.show { display: block; }
-
-  .denial-form select {
-    margin-bottom: 10px;
-  }
-
-  /* ALERT */
-  .alert {
-    display: none;
-    padding: 12px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    margin-bottom: 16px;
-  }
-
-  .alert.show { display: block; }
-  .alert.success { background: rgba(0,255,136,0.1); color: var(--accent2); border: 1px solid rgba(0,255,136,0.2); }
-  .alert.error { background: rgba(255,68,68,0.1); color: var(--danger); border: 1px solid rgba(255,68,68,0.2); }
-
-  .claim-id { font-family: 'DM Mono', monospace; color: var(--accent); font-weight: 500; }
-  .patient-name { color: var(--text); font-weight: 500; }
-
-  @media (max-width: 1024px) {
-    .stats-grid { grid-template-columns: repeat(3, 1fr); }
-    .form-grid { grid-template-columns: 1fr; }
-    .container { padding: 20px; }
-    header { padding: 16px 20px; }
-  }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Claimflow — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: 'DM Mono', monospace;
+      min-height: 100vh;
+    }
+
+    /* HEADER */
+    .header {
+      background: #111;
+      border-bottom: 1px solid #1e1e1e;
+      padding: 0 28px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-logo {
+      font-size: 1.1rem;
+      font-weight: 500;
+      color: #00ff88;
+      letter-spacing: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .practice-name {
+      font-size: 0.75rem;
+      color: #555;
+    }
+
+    .logout-btn {
+      font-size: 0.7rem;
+      color: #ff4444;
+      cursor: pointer;
+      letter-spacing: 1px;
+      background: none;
+      border: 1px solid #ff444433;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .logout-btn:hover { background: #ff444411; }
+
+    /* LAYOUT */
+    .main { display: flex; min-height: calc(100vh - 56px); }
+
+    .sidebar {
+      width: 200px;
+      background: #0d0d0d;
+      border-right: 1px solid #1a1a1a;
+      padding: 24px 0;
+      flex-shrink: 0;
+    }
+
+    .nav-item {
+      padding: 10px 24px;
+      font-size: 0.75rem;
+      color: #555;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: all 0.15s;
+      border-left: 2px solid transparent;
+    }
+
+    .nav-item:hover { color: #aaa; background: #111; }
+    .nav-item.active { color: #00ff88; border-left-color: #00ff88; background: #111; }
+
+    .content { flex: 1; padding: 28px; overflow-y: auto; }
+
+    /* STAT CARDS */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .stat-card {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
+      padding: 20px;
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      color: #555;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 500;
+      color: #00ff88;
+    }
+
+    /* PANELS */
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    .panel-title {
+      font-size: 0.8rem;
+      color: #00ff88;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+      text-transform: uppercase;
+    }
+
+    /* FORM */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 0.65rem;
+      color: #555;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    input, select, textarea {
+      background: #111;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 9px 12px;
+      color: #e0e0e0;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus { border-color: #00ff88; }
+    textarea { resize: vertical; min-height: 100px; }
+
+    .btn-primary {
+      background: #00ff88;
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 24px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: background 0.2s;
+    }
+
+    .btn-primary:hover { background: #00cc6a; }
+    .btn-primary:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+    /* RESULTS */
+    .result-box {
+      background: #111;
+      border: 1px solid #1e1e1e;
+      border-radius: 6px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .result-title {
+      font-size: 0.7rem;
+      color: #00ff88;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+
+    .code-tag {
+      display: inline-block;
+      background: #0a2a1a;
+      border: 1px solid #00ff8833;
+      color: #00ff88;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 0.75rem;
+      margin: 3px;
+    }
+
+    .auth-tag {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      margin: 3px;
+    }
+
+    .auth-required { background: #2a0a0a; border: 1px solid #ff444433; color: #ff4444; }
+    .auth-ok { background: #0a2a1a; border: 1px solid #00ff8833; color: #00ff88; }
+
+    /* CLAIMS TABLE */
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 10px 12px;
+      color: #555;
+      font-size: 0.65rem;
+      letter-spacing: 1px;
+      border-bottom: 1px solid #1e1e1e;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #151515;
+      vertical-align: top;
+    }
+
+    tr:hover td { background: #111; }
+
+    .status-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 0.65rem;
+      letter-spacing: 0.5px;
+    }
+
+    .status-SUBMITTED { background: #1a1a2a; color: #8888ff; border: 1px solid #8888ff33; }
+    .status-APPROVED { background: #0a2a1a; color: #00ff88; border: 1px solid #00ff8833; }
+    .status-DENIED { background: #2a0a0a; color: #ff4444; border: 1px solid #ff444433; }
+
+    .appeal-btn {
+      background: none;
+      border: 1px solid #ff9900;
+      color: #ff9900;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 0.65rem;
+      cursor: pointer;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .appeal-btn:hover { background: #ff990011; }
+
+    /* APPEAL MODAL */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      display: none;
+    }
+
+    .modal {
+      background: #111;
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 28px;
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-title {
+      font-size: 0.8rem;
+      color: #00ff88;
+      letter-spacing: 2px;
+      margin-bottom: 16px;
+    }
+
+    .modal-close {
+      float: right;
+      background: none;
+      border: none;
+      color: #555;
+      font-size: 1.2rem;
+      cursor: pointer;
+      font-family: 'DM Mono', monospace;
+    }
+
+    .appeal-letter {
+      background: #0a0a0a;
+      border: 1px solid #1e1e1e;
+      border-radius: 4px;
+      padding: 16px;
+      font-size: 0.75rem;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      color: #ccc;
+      margin-top: 12px;
+    }
+
+    .loading {
+      color: #555;
+      font-size: 0.75rem;
+      padding: 20px 0;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .msg { font-size: 0.75rem; padding: 10px 14px; border-radius: 4px; margin-top: 12px; }
+    .msg.error { background: #1a0a0a; border: 1px solid #ff4444; color: #ff4444; }
+    .msg.success { background: #0a1a0a; border: 1px solid #00ff88; color: #00ff88; }
+  </style>
 </head>
 <body>
 
-<header>
-  <div class="logo">
-    <div class="logo-icon">⚕</div>
-    <div class="logo-text"><span style="font-family:Verdana,sans-serif;font-weight:700;letter-spacing:-1px">Claim<span style="color:var(--accent)">flow</span></span></div>
+<!-- HEADER -->
+<div class="header">
+  <div class="header-logo">CLAIMFLOW</div>
+  <div class="header-right">
+    <div class="practice-name" id="practiceName"></div>
+    <button class="logout-btn" onclick="logout()">LOGOUT</button>
   </div>
-  <div class="header-badge">SYSTEM ONLINE</div>
-</header>
+</div>
 
-<div class="container">
-
-  <!-- STATS -->
-  <div class="stats-grid" id="statsGrid">
-    <div class="stat-card">
-      <div class="stat-label">Total Claims</div>
-      <div class="stat-value blue" id="statTotal">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Submitted</div>
-      <div class="stat-value" id="statSubmitted">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Approved</div>
-      <div class="stat-value green" id="statApproved">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Denied</div>
-      <div class="stat-value red" id="statDenied">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Auth Required</div>
-      <div class="stat-value yellow" id="statAuth">—</div>
-    </div>
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="nav-item active" onclick="showPanel('dashboard')">DASHBOARD</div>
+    <div class="nav-item" onclick="showPanel('newClaim')">NEW CLAIM</div>
+    <div class="nav-item" onclick="showPanel('claims')">ALL CLAIMS</div>
   </div>
 
-  <!-- TABS -->
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('submit')">Submit Claim</button>
-    <button class="tab" onclick="switchTab('claims')">Claims Dashboard</button>
-  </div>
+  <!-- CONTENT -->
+  <div class="content">
 
-  <!-- SUBMIT PANEL -->
-  <div class="panel active" id="panel-submit">
-    <div class="form-grid">
-      <div class="form-card">
-        <h2>New Claim</h2>
-        <p>Enter patient details and paste the clinical note. The AI will extract codes, check prior auth, and submit the claim automatically.</p>
+    <!-- DASHBOARD PANEL -->
+    <div id="dashboardPanel" class="panel active">
+      <div class="panel-title">OVERVIEW</div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">TOTAL CLAIMS</div>
+          <div class="stat-value" id="statTotal">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">SUBMITTED</div>
+          <div class="stat-value" id="statSubmitted">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">APPROVED</div>
+          <div class="stat-value" id="statApproved">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">DENIED</div>
+          <div class="stat-value" id="statDenied">—</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">AUTH REQUIRED</div>
+          <div class="stat-value" id="statAuth">—</div>
+        </div>
+      </div>
 
-        <div class="alert" id="submitAlert"></div>
+      <div class="result-box">
+        <div class="result-title">RECENT CLAIMS</div>
+        <div id="recentClaims"><div class="loading">Loading claims...</div></div>
+      </div>
+    </div>
 
-        <div class="field">
+    <!-- NEW CLAIM PANEL -->
+    <div id="newClaimPanel" class="panel">
+      <div class="panel-title">PROCESS NEW CLAIM</div>
+      <div class="form-grid">
+        <div class="form-group">
           <label>Patient Name</label>
-          <input type="text" id="patientName" placeholder="John Doe">
+          <input type="text" id="patientName" placeholder="John Smith"/>
         </div>
-        <div class="field">
+        <div class="form-group">
           <label>Date of Service</label>
-          <input type="date" id="dateOfService">
+          <input type="date" id="dateOfService"/>
         </div>
-        <div class="field">
+        <div class="form-group">
           <label>Insurance Payer</label>
           <select id="payer">
             <option value="UnitedHealthcare">UnitedHealthcare</option>
             <option value="Aetna">Aetna</option>
-            <option value="BlueCross">BlueCross</option>
+            <option value="BlueCross">BlueCross Colorado</option>
             <option value="Cigna">Cigna</option>
+            <option value="ColoradoMedicaid">Colorado Medicaid</option>
+            <option value="Medicare">Medicare Part B</option>
           </select>
         </div>
-        <div class="field">
+        <div class="form-group full">
           <label>Clinical Note</label>
-          <textarea id="clinicalNote" placeholder="Paste the full clinical note here..."></textarea>
-        </div>
-        <button class="btn btn-primary" onclick="submitClaim()" id="submitBtn">
-          ⚡ Process Claim with AI
-        </button>
-        <div class="loading" id="submitLoading">
-          <div class="spinner"></div>
-          AI is extracting codes and checking authorization...
+          <textarea id="clinicalNote" placeholder="Patient presents with type 2 diabetes mellitus and hypertension. A1C elevated at 8.2%. Performed office visit and ECG..."></textarea>
         </div>
       </div>
-
-      <div class="form-card">
-        <h2>AI Results</h2>
-        <p>Extracted codes, prior authorization status, and claim ID will appear here after processing.</p>
-
-        <div id="resultsArea">
-          <div class="empty">
-            <div class="empty-icon">🤖</div>
-            <p>Submit a clinical note to see AI results</p>
-          </div>
-        </div>
-      </div>
+      <button class="btn-primary" id="processBtn" onclick="processClaim()">PROCESS CLAIM →</button>
+      <div id="claimResult"></div>
     </div>
-  </div>
 
-  <!-- CLAIMS PANEL -->
-  <div class="panel" id="panel-claims">
-    <div class="table-wrap">
-      <div class="table-header">
-        <h2>All Claims</h2>
-        <button class="btn" style="background:var(--surface2);color:var(--text2);border:1px solid var(--border);font-size:12px;padding:8px 16px;" onclick="loadClaims()">
-          ↻ Refresh
-        </button>
-      </div>
-      <div id="claimsTable">
-        <div class="empty">
-          <div class="empty-icon">📋</div>
-          <p>No claims yet. Submit a claim to get started.</p>
-        </div>
-      </div>
+    <!-- ALL CLAIMS PANEL -->
+    <div id="claimsPanel" class="panel">
+      <div class="panel-title">ALL CLAIMS</div>
+      <div id="claimsTableWrap"><div class="loading">Loading...</div></div>
     </div>
-  </div>
 
+  </div>
 </div>
 
 <!-- APPEAL MODAL -->
 <div class="modal-overlay" id="appealModal">
   <div class="modal">
-    <div class="modal-head">
-      <h3>Appeal Letter</h3>
-      <button class="close-btn" onclick="closeModal()">×</button>
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="modal-title">AI APPEAL LETTER GENERATOR</div>
+    <div class="form-group" style="margin-bottom:16px">
+      <label>Denial Code</label>
+      <select id="denialCode">
+        <option value="CO-4">CO-4 — Procedure inconsistent with modifier</option>
+        <option value="CO-11">CO-11 — Diagnosis inconsistent with procedure</option>
+        <option value="CO-29">CO-29 — Timely filing limit exceeded</option>
+        <option value="CO-50">CO-50 — Non-covered service</option>
+        <option value="CO-97">CO-97 — Service already adjudicated</option>
+        <option value="PR-1">PR-1 — Deductible not met</option>
+        <option value="PR-2">PR-2 — Coinsurance</option>
+        <option value="PR-96">PR-96 — Prior auth not obtained</option>
+        <option value="OA-23">OA-23 — Payment adjusted/prior auth</option>
+      </select>
     </div>
-    <div class="modal-body">
-      <pre id="appealContent"></pre>
-    </div>
+    <button class="btn-primary" id="appealBtn" onclick="generateAppeal()">GENERATE APPEAL LETTER →</button>
+    <div id="appealResult"></div>
   </div>
 </div>
 
 <script>
-const API = 'const API = 'const API = 'const API = 'https://app.claimflowpay.com';';';';
+  const API = 'https://app.claimflowpay.com';
+  let currentClaimId = null;
 
-// Set today's date
-document.getElementById('dateOfService').value = new Date().toISOString().split('T')[0];
+  // AUTH CHECK
+  const token = localStorage.getItem('cf_token');
+  const practiceName = localStorage.getItem('cf_practice');
 
-async function loadStats() {
-  try {
-    const res = await fetch(API + '/stats');
-    const data = await res.json();
-    document.getElementById('statTotal').textContent = data.total;
-    document.getElementById('statSubmitted').textContent = data.submitted;
-    document.getElementById('statApproved').textContent = data.approved;
-    document.getElementById('statDenied').textContent = data.denied;
-    document.getElementById('statAuth').textContent = data.auth_required;
-  } catch(e) {
-    console.log('Could not load stats');
-  }
-}
-
-function switchTab(tab) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-  event.target.classList.add('active');
-  document.getElementById('panel-' + tab).classList.add('active');
-  if (tab === 'claims') loadClaims();
-}
-
-function showAlert(id, msg, type) {
-  const el = document.getElementById(id);
-  el.textContent = msg;
-  el.className = 'alert show ' + type;
-  setTimeout(() => el.className = 'alert', 4000);
-}
-
-async function submitClaim() {
-  const patientName = document.getElementById('patientName').value.trim();
-  const dateOfService = document.getElementById('dateOfService').value;
-  const payer = document.getElementById('payer').value;
-  const clinicalNote = document.getElementById('clinicalNote').value.trim();
-
-  if (!patientName || !dateOfService || !clinicalNote) {
-    showAlert('submitAlert', 'Please fill in all fields.', 'error');
-    return;
-  }
-
-  const btn = document.getElementById('submitBtn');
-  const loading = document.getElementById('submitLoading');
-  btn.disabled = true;
-  loading.classList.add('show');
-
-  try {
-    const res = await fetch(API + '/process-claim', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ patient_name: patientName, date_of_service: dateOfService, payer, clinical_note: clinicalNote })
-    });
-
-    const data = await res.json();
-
-    // Show results
-    let authHTML = data.auth_results.map(r => {
-      const cls = r.requires_prior_auth ? 'auth' : 'ok';
-      return '<span class="code-badge ' + cls + '">' + r.cpt_code + ' — ' + r.status + '</span>';
-    }).join('');
-
-    let icd10HTML = data.icd10_codes.map(c => '<span class="code-badge icd">' + c + '</span>').join('');
-    let cptHTML = data.cpt_codes.map(c => '<span class="code-badge cpt">' + c + '</span>').join('');
-
-    document.getElementById('resultsArea').innerHTML = `
-      <div class="result-card">
-        <div class="result-title">Claim Created</div>
-        <div style="font-family:Verdana,sans-serif;font-size:28px;font-weight:800;color:var(--accent2);margin-bottom:4px">#${data.claim_id}</div>
-        <div style="font-size:12px;color:var(--text3)">Status: SUBMITTED</div>
-      </div>
-      <div class="result-card">
-        <div class="result-title">ICD-10 Diagnosis Codes</div>
-        <div class="code-row">${icd10HTML || '<span style="color:var(--text3);font-size:13px">None found</span>'}</div>
-      </div>
-      <div class="result-card">
-        <div class="result-title">CPT Procedure Codes</div>
-        <div class="code-row">${cptHTML || '<span style="color:var(--text3);font-size:13px">None found</span>'}</div>
-      </div>
-      <div class="result-card">
-        <div class="result-title">Prior Authorization</div>
-        <div class="code-row">${authHTML}</div>
-      </div>
-    `;
-
+  if (!token) {
+    window.location.href = '/';
+  } else {
+    document.getElementById('practiceName').textContent = practiceName || '';
     loadStats();
-    showAlert('submitAlert', 'Claim #' + data.claim_id + ' submitted successfully!', 'success');
-
-  } catch(e) {
-    showAlert('submitAlert', 'Error: Could not connect to server. Make sure app.py is running.', 'error');
-  } finally {
-    btn.disabled = false;
-    loading.classList.remove('show');
+    loadRecentClaims();
   }
-}
 
-async function loadClaims() {
-  try {
-    const res = await fetch(API + '/claims');
-    const claims = await res.json();
+  function authHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token
+    };
+  }
 
-    if (!claims.length) {
-      document.getElementById('claimsTable').innerHTML = `
-        <div class="empty">
-          <div class="empty-icon">📋</div>
-          <p>No claims yet. Submit a claim to get started.</p>
-        </div>`;
+  function logout() {
+    localStorage.clear();
+    window.location.href = '/';
+  }
+
+  function showPanel(name) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById(name + 'Panel').classList.add('active');
+    event.target.classList.add('active');
+
+    if (name === 'claims') loadClaimsTable();
+    if (name === 'dashboard') { loadStats(); loadRecentClaims(); }
+  }
+
+  async function loadStats() {
+    try {
+      const res = await fetch(API + '/stats', { headers: authHeaders() });
+      if (res.status === 401) { logout(); return; }
+      const data = await res.json();
+      document.getElementById('statTotal').textContent = data.total;
+      document.getElementById('statSubmitted').textContent = data.submitted;
+      document.getElementById('statApproved').textContent = data.approved;
+      document.getElementById('statDenied').textContent = data.denied;
+      document.getElementById('statAuth').textContent = data.auth_required;
+    } catch(e) {}
+  }
+
+  async function loadRecentClaims() {
+    try {
+      const res = await fetch(API + '/claims', { headers: authHeaders() });
+      if (res.status === 401) { logout(); return; }
+      const claims = await res.json();
+      const recent = claims.slice(0, 5);
+      const el = document.getElementById('recentClaims');
+      if (!recent.length) { el.innerHTML = '<div style="color:#555;font-size:0.75rem">No claims yet. Process your first claim!</div>'; return; }
+      el.innerHTML = recent.map(c => `
+        <div style="padding:10px 0;border-bottom:1px solid #151515;font-size:0.75rem">
+          <span style="color:#aaa">${c.patient_name}</span>
+          <span style="color:#444;margin:0 8px">·</span>
+          <span style="color:#555">${c.payer}</span>
+          <span style="color:#444;margin:0 8px">·</span>
+          <span class="status-badge status-${c.claim_status?.split(' ')[0]}">${c.claim_status}</span>
+        </div>
+      `).join('');
+    } catch(e) {}
+  }
+
+  async function processClaim() {
+    const btn = document.getElementById('processBtn');
+    const resultEl = document.getElementById('claimResult');
+    const patient = document.getElementById('patientName').value.trim();
+    const date = document.getElementById('dateOfService').value;
+    const payer = document.getElementById('payer').value;
+    const note = document.getElementById('clinicalNote').value.trim();
+
+    if (!patient || !date || !note) {
+      resultEl.innerHTML = '<div class="msg error">Please fill in all required fields.</div>';
       return;
     }
 
-    let rows = claims.map(c => {
-      const statusClass = c.claim_status.includes('APPROVED') ? 'approved' :
-                          c.claim_status.includes('DENIED') ? 'denied' :
-                          c.claim_status.includes('SUBMITTED') ? 'submitted' : 'pending';
-      const authClass = c.prior_auth_required === 'YES' ? 'orange' : 'green';
-      const icd = (c.icd10_codes || []).map(code => '<span class="code-badge icd">' + code + '</span>').join(' ');
-      const cpt = (c.cpt_codes || []).map(code => '<span class="code-badge cpt">' + code + '</span>').join(' ');
+    btn.disabled = true;
+    btn.textContent = 'PROCESSING...';
+    resultEl.innerHTML = '<div class="loading">AI is extracting codes and checking prior auth...</div>';
 
-      return `<tr>
-        <td class="claim-id">#${c.id}</td>
-        <td class="patient-name">${c.patient_name}</td>
-        <td>${c.date_of_service}</td>
-        <td>${c.payer}</td>
-        <td>${icd}</td>
-        <td>${cpt}</td>
-        <td><span class="code-badge ${authClass === 'orange' ? 'auth' : 'ok'}">${c.prior_auth_required}</span></td>
-        <td><span class="status-badge status-${statusClass}">${c.claim_status}</span></td>
-        <td>
-          ${c.appeal_letter ? '<button class="btn btn-danger" onclick=\'showAppeal(' + JSON.stringify(c.appeal_letter) + ')\'>View Appeal</button>' : ''}
-          ${!c.claim_status.includes('DENIED') ? '<button class="btn btn-danger" style="margin-top:4px" onclick="showDenialForm(' + c.id + ')">Mark Denied</button>' : ''}
-          <div class="denial-form" id="denial-' + c.id + '">
-            <select id="dcode-' + c.id + '">
-              <option value="PR-96">PR-96 — Prior auth not obtained</option>
-              <option value="CO-4">CO-4 — Code inconsistent with modifier</option>
-              <option value="CO-11">CO-11 — Diagnosis inconsistent</option>
-              <option value="CO-29">CO-29 — Timely filing</option>
-              <option value="CO-50">CO-50 — Non-covered service</option>
-              <option value="PR-1">PR-1 — Deductible not met</option>
-            </select>
-            <button class="btn btn-danger" onclick="processDenial(${c.id})">Generate Appeal Letter</button>
+    try {
+      const res = await fetch(API + '/process-claim', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ patient_name: patient, date_of_service: date, payer, clinical_note: note })
+      });
+      if (res.status === 401) { logout(); return; }
+      const data = await res.json();
+
+      resultEl.innerHTML = `
+        <div class="result-box">
+          <div class="result-title">CLAIM #${data.claim_id} PROCESSED</div>
+          <div style="margin-bottom:12px">
+            <div style="font-size:0.65rem;color:#555;margin-bottom:6px">ICD-10 DIAGNOSIS CODES</div>
+            ${data.icd10_codes.map(c => `<span class="code-tag">${c}</span>`).join('') || '<span style="color:#555;font-size:0.75rem">None extracted</span>'}
           </div>
-        </td>
-      </tr>`;
-    }).join('');
-
-    document.getElementById('claimsTable').innerHTML = `
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th><th>Patient</th><th>DOS</th><th>Payer</th>
-            <th>ICD-10</th><th>CPT</th><th>Auth</th><th>Status</th><th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>`;
-  } catch(e) {
-    document.getElementById('claimsTable').innerHTML = `
-      <div class="empty">
-        <div class="empty-icon">⚠️</div>
-        <p>Could not connect to server. Make sure app.py is running.</p>
-      </div>`;
+          <div style="margin-bottom:12px">
+            <div style="font-size:0.65rem;color:#555;margin-bottom:6px">CPT PROCEDURE CODES</div>
+            ${data.cpt_codes.map(c => `<span class="code-tag">${c}</span>`).join('') || '<span style="color:#555;font-size:0.75rem">None extracted</span>'}
+          </div>
+          <div>
+            <div style="font-size:0.65rem;color:#555;margin-bottom:6px">PRIOR AUTH STATUS</div>
+            ${data.auth_results.map(r => `
+              <span class="auth-tag ${r.requires_prior_auth ? 'auth-required' : 'auth-ok'}">
+                ${r.cpt_code}: ${r.status}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      loadStats();
+    } catch(e) {
+      resultEl.innerHTML = '<div class="msg error">Error processing claim. Please try again.</div>';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'PROCESS CLAIM →';
+    }
   }
-}
 
-function showDenialForm(claimId) {
-  const form = document.getElementById('denial-' + claimId);
-  form.classList.toggle('show');
-}
+  async function loadClaimsTable() {
+    const el = document.getElementById('claimsTableWrap');
+    el.innerHTML = '<div class="loading">Loading claims...</div>';
+    try {
+      const res = await fetch(API + '/claims', { headers: authHeaders() });
+      if (res.status === 401) { logout(); return; }
+      const claims = await res.json();
 
-async function processDenial(claimId) {
-  const denialCode = document.getElementById('dcode-' + claimId).value;
-  try {
-    const res = await fetch(API + '/process-denial', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ claim_id: claimId, denial_code: denialCode })
-    });
-    const data = await res.json();
-    showAppeal(data.appeal_letter);
-    loadClaims();
-    loadStats();
-  } catch(e) {
-    alert('Error processing denial. Make sure server is running.');
+      if (!claims.length) {
+        el.innerHTML = '<div style="color:#555;font-size:0.75rem;padding:20px 0">No claims yet.</div>';
+        return;
+      }
+
+      el.innerHTML = `
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>PATIENT</th>
+                <th>DATE</th>
+                <th>PAYER</th>
+                <th>ICD-10</th>
+                <th>CPT</th>
+                <th>AUTH</th>
+                <th>STATUS</th>
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${claims.map(c => `
+                <tr>
+                  <td style="color:#444">${c.id}</td>
+                  <td style="color:#aaa">${c.patient_name}</td>
+                  <td style="color:#555">${c.date_of_service}</td>
+                  <td style="color:#555">${c.payer}</td>
+                  <td>${c.icd10_codes.map(x => `<span class="code-tag">${x}</span>`).join('')}</td>
+                  <td>${c.cpt_codes.map(x => `<span class="code-tag">${x}</span>`).join('')}</td>
+                  <td><span style="color:${c.prior_auth_required==='YES'?'#ff4444':'#00ff88'};font-size:0.7rem">${c.prior_auth_required}</span></td>
+                  <td><span class="status-badge status-${c.claim_status?.split(' ')[0]}">${c.claim_status}</span></td>
+                  <td><button class="appeal-btn" onclick="openAppeal(${c.id})">APPEAL</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } catch(e) {
+      el.innerHTML = '<div class="msg error">Error loading claims.</div>';
+    }
   }
-}
 
-function showAppeal(letter) {
-  document.getElementById('appealContent').textContent = letter;
-  document.getElementById('appealModal').classList.add('show');
-}
+  function openAppeal(claimId) {
+    currentClaimId = claimId;
+    document.getElementById('appealResult').innerHTML = '';
+    document.getElementById('appealModal').style.display = 'flex';
+  }
 
-function closeModal() {
-  document.getElementById('appealModal').classList.remove('show');
-}
+  function closeModal() {
+    document.getElementById('appealModal').style.display = 'none';
+    currentClaimId = null;
+  }
 
-// Load stats on start
-loadStats();
-setInterval(loadStats, 30000);
+  async function generateAppeal() {
+    if (!currentClaimId) return;
+    const btn = document.getElementById('appealBtn');
+    const denialCode = document.getElementById('denialCode').value;
+    const resultEl = document.getElementById('appealResult');
+
+    btn.disabled = true;
+    btn.textContent = 'GENERATING...';
+    resultEl.innerHTML = '<div class="loading">AI is writing your appeal letter...</div>';
+
+    try {
+      const res = await fetch(API + '/process-denial', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ claim_id: currentClaimId, denial_code: denialCode })
+      });
+      if (res.status === 401) { logout(); return; }
+      const data = await res.json();
+
+      resultEl.innerHTML = `
+        <div style="margin-top:16px">
+          <div style="font-size:0.65rem;color:#555;margin-bottom:8px">DENIAL CATEGORY: <span style="color:#ff9900">${data.denial_info.category}</span></div>
+          <div style="font-size:0.65rem;color:#555;margin-bottom:16px">ACTION: <span style="color:#aaa">${data.denial_info.recommended_action}</span></div>
+          <div class="result-title">GENERATED APPEAL LETTER</div>
+          <div class="appeal-letter">${data.appeal_letter}</div>
+        </div>
+      `;
+    } catch(e) {
+      resultEl.innerHTML = '<div class="msg error">Error generating appeal. Please try again.</div>';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'GENERATE APPEAL LETTER →';
+    }
+  }
 </script>
 </body>
 </html>

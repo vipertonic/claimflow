@@ -3,14 +3,16 @@ import os
 import json
 import re
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 import uvicorn
+import bcrypt
+import jwt
 
 load_dotenv()
 
@@ -24,14 +26,22 @@ app.add_middleware(
 )
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+JWT_SECRET = os.getenv("JWT_SECRET", "claimflow-super-secret-key-2026")
+security = HTTPBearer()
 
 
+# -----------------------------------------
+# DATABASE SETUP
+# -----------------------------------------
 def setup_database():
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
+
+    # Claims table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS claims (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            practice_id INTEGER,
             patient_name TEXT,
             date_of_service TEXT,
             icd10_codes TEXT,
@@ -47,12 +57,63 @@ def setup_database():
             appeal_letter TEXT
         )
     ''')
+
+    # Users/Practices table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS practices (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            practice_name TEXT,
+            email TEXT UNIQUE,
+            password_hash TEXT,
+            npi TEXT,
+            phone TEXT,
+            address TEXT,
+            city TEXT,
+            state TEXT,
+            zip TEXT,
+            plan TEXT DEFAULT "professional",
+            created_at TEXT,
+            is_active INTEGER DEFAULT 1
+        )
+    ''')
+
     conn.commit()
     conn.close()
 
 setup_database()
 
 
+# -----------------------------------------
+# AUTH HELPERS
+# -----------------------------------------
+def hash_password(password):
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password, hashed):
+    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+
+def create_token(practice_id, email):
+    payload = {
+        "practice_id": practice_id,
+        "email": email,
+        "exp": datetime.utcnow() + timedelta(hours=8)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Session expired. Please login again.")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token. Please login again.")
+
+
+# -----------------------------------------
+# MODULE 1 - AI Medical Code Extractor
+# -----------------------------------------
 def extract_medical_codes(clinical_note):
     response = client.messages.create(
         model="claude-opus-4-6",
@@ -72,6 +133,9 @@ def extract_medical_codes(clinical_note):
         return {"icd10": icd10, "cpt": cpt}
 
 
+# -----------------------------------------
+# MODULE 2 - Prior Auth Decision Engine
+# -----------------------------------------
 PRIOR_AUTH_MATRIX = {
     "UnitedHealthcare": {
         "99213": False, "99214": False, "70553": True,
@@ -95,7 +159,6 @@ PRIOR_AUTH_MATRIX = {
     }
 }
 
-
 def check_prior_auth(cpt_codes, payer):
     results = []
     payer_rules = PRIOR_AUTH_MATRIX.get(payer, {})
@@ -110,6 +173,9 @@ def check_prior_auth(cpt_codes, payer):
     return results
 
 
+# -----------------------------------------
+# DENIAL REASONS
+# -----------------------------------------
 DENIAL_REASONS = {
     "CO-4":  "Procedure code inconsistent with modifier",
     "CO-11": "Diagnosis inconsistent with procedure",
@@ -122,7 +188,6 @@ DENIAL_REASONS = {
     "PR-96": "Prior authorization not obtained",
     "OA-23": "Payment adjusted due to prior authorization"
 }
-
 
 def categorize_denial(denial_code):
     reason = DENIAL_REASONS.get(denial_code, "Unknown denial reason")
@@ -147,17 +212,29 @@ def categorize_denial(denial_code):
     return {"denial_code": denial_code, "reason": reason, "category": category, "recommended_action": action}
 
 
+# -----------------------------------------
+# REQUEST MODELS
+# -----------------------------------------
+class RegisterRequest(BaseModel):
+    practice_name: str
+    email: str
+    password: str
+    npi: str = ""
+    phone: str = ""
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 class ProcessClaimRequest(BaseModel):
     patient_name: str
     date_of_service: str
     payer: str
     clinical_note: str
 
-
 class DenialRequest(BaseModel):
     claim_id: int
     denial_code: str
-
 
 class UpdateStatusRequest(BaseModel):
     claim_id: int
@@ -166,23 +243,97 @@ class UpdateStatusRequest(BaseModel):
 
 
 # -----------------------------------------
-# SERVE DASHBOARD AT ROOT URL
+# SERVE PAGES
 # -----------------------------------------
 @app.get("/")
+def serve_login():
+    login_path = os.path.join(os.path.dirname(__file__), "login.html")
+    if os.path.exists(login_path):
+        return FileResponse(login_path, media_type="text/html")
+    return {"message": "Claimflow API is running!"}
+
+@app.get("/dashboard")
 def serve_dashboard():
     dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
     if os.path.exists(dashboard_path):
         return FileResponse(dashboard_path, media_type="text/html")
-    return {"message": "Medical Billing AI API is running!"}
-
+    return {"message": "Dashboard not found"}
 
 @app.get("/health")
 def health():
-    return {"message": "Medical Billing AI API is running!"}
+    return {"message": "Claimflow API is running!"}
 
 
+# -----------------------------------------
+# AUTH ENDPOINTS
+# -----------------------------------------
+@app.post("/register")
+def register(request: RegisterRequest):
+    conn = sqlite3.connect('claims.db')
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT id FROM practices WHERE email = ?', (request.email,))
+    if cursor.fetchone():
+        conn.close()
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    password_hash = hash_password(request.password)
+    cursor.execute('''
+        INSERT INTO practices (practice_name, email, password_hash, npi, phone, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (
+        request.practice_name,
+        request.email,
+        password_hash,
+        request.npi,
+        request.phone,
+        datetime.now().strftime("%Y-%m-%d %H:%M")
+    ))
+    practice_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    token = create_token(practice_id, request.email)
+    return {
+        "message": "Account created successfully!",
+        "token": token,
+        "practice_name": request.practice_name,
+        "email": request.email
+    }
+
+
+@app.post("/login")
+def login(request: LoginRequest):
+    conn = sqlite3.connect('claims.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM practices WHERE email = ?', (request.email,))
+    practice = cursor.fetchone()
+    conn.close()
+
+    if not practice:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not verify_password(request.password, practice[3]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    if not practice[11]:
+        raise HTTPException(status_code=401, detail="Account is inactive")
+
+    token = create_token(practice[0], request.email)
+    return {
+        "message": "Login successful!",
+        "token": token,
+        "practice_name": practice[1],
+        "email": practice[2]
+    }
+
+
+# -----------------------------------------
+# PROTECTED API ENDPOINTS
+# -----------------------------------------
 @app.post("/process-claim")
-def process_claim(request: ProcessClaimRequest):
+def process_claim(request: ProcessClaimRequest, user=Depends(verify_token)):
+    practice_id = user["practice_id"]
     codes = extract_medical_codes(request.clinical_note)
     auth_results = check_prior_auth(codes["cpt"], request.payer)
     codes_needing_auth = [r["cpt_code"] for r in auth_results if r["requires_prior_auth"]]
@@ -193,13 +344,13 @@ def process_claim(request: ProcessClaimRequest):
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO claims (
-            patient_name, date_of_service, icd10_codes,
+            practice_id, patient_name, date_of_service, icd10_codes,
             cpt_codes, payer, prior_auth_required,
             prior_auth_status, claim_status,
             date_submitted, date_updated, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        request.patient_name, request.date_of_service,
+        practice_id, request.patient_name, request.date_of_service,
         json.dumps(codes["icd10"]), json.dumps(codes["cpt"]),
         request.payer, prior_auth_required, prior_auth_status,
         "SUBMITTED",
@@ -222,10 +373,11 @@ def process_claim(request: ProcessClaimRequest):
 
 
 @app.get("/claims")
-def get_all_claims():
+def get_all_claims(user=Depends(verify_token)):
+    practice_id = user["practice_id"]
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM claims ORDER BY id DESC')
+    cursor.execute('SELECT * FROM claims WHERE practice_id = ? ORDER BY id DESC', (practice_id,))
     rows = cursor.fetchall()
     conn.close()
 
@@ -233,39 +385,39 @@ def get_all_claims():
     for row in rows:
         claims.append({
             "id": row[0],
-            "patient_name": row[1],
-            "date_of_service": row[2],
-            "icd10_codes": json.loads(row[3]) if row[3] else [],
-            "cpt_codes": json.loads(row[4]) if row[4] else [],
-            "payer": row[5],
-            "prior_auth_required": row[6],
-            "prior_auth_status": row[7],
-            "claim_status": row[8],
-            "date_submitted": row[9],
-            "date_updated": row[10],
-            "notes": row[11],
-            "denial_reason": row[12],
-            "appeal_letter": row[13]
+            "patient_name": row[2],
+            "date_of_service": row[3],
+            "icd10_codes": json.loads(row[4]) if row[4] else [],
+            "cpt_codes": json.loads(row[5]) if row[5] else [],
+            "payer": row[6],
+            "prior_auth_required": row[7],
+            "prior_auth_status": row[8],
+            "claim_status": row[9],
+            "date_submitted": row[10],
+            "date_updated": row[11],
+            "notes": row[12],
+            "denial_reason": row[13],
+            "appeal_letter": row[14]
         })
     return claims
 
 
 @app.post("/process-denial")
-def process_denial(request: DenialRequest):
+def process_denial(request: DenialRequest, user=Depends(verify_token)):
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM claims WHERE id = ?', (request.claim_id,))
+    cursor.execute('SELECT * FROM claims WHERE id = ? AND practice_id = ?',
+                   (request.claim_id, user["practice_id"]))
     row = cursor.fetchone()
     conn.close()
 
     if not row:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    patient_name = row[1]
-    payer = row[5]
-    icd10_codes = json.loads(row[3]) if row[3] else []
-    cpt_codes = json.loads(row[4]) if row[4] else []
-
+    patient_name = row[2]
+    payer = row[6]
+    icd10_codes = json.loads(row[4]) if row[4] else []
+    cpt_codes = json.loads(row[5]) if row[5] else []
     denial_info = categorize_denial(request.denial_code)
 
     response = client.messages.create(
@@ -299,41 +451,23 @@ def process_denial(request: DenialRequest):
     ))
     conn.commit()
     conn.close()
-
     return {"denial_info": denial_info, "appeal_letter": appeal_letter}
 
 
-@app.post("/update-status")
-def update_status(request: UpdateStatusRequest):
-    conn = sqlite3.connect('claims.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE claims SET claim_status = ?, date_updated = ?, notes = ?
-        WHERE id = ?
-    ''', (
-        request.new_status,
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        request.notes,
-        request.claim_id
-    ))
-    conn.commit()
-    conn.close()
-    return {"message": "Claim #" + str(request.claim_id) + " updated to " + request.new_status}
-
-
 @app.get("/stats")
-def get_stats():
+def get_stats(user=Depends(verify_token)):
+    practice_id = user["practice_id"]
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM claims')
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ?', (practice_id,))
     total = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE claim_status = "SUBMITTED"')
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND claim_status = "SUBMITTED"', (practice_id,))
     submitted = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE claim_status = "APPROVED"')
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND claim_status = "APPROVED"', (practice_id,))
     approved = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE claim_status LIKE "DENIED%"')
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND claim_status LIKE "DENIED%"', (practice_id,))
     denied = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE prior_auth_required = "YES"')
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND prior_auth_required = "YES"', (practice_id,))
     auth_required = cursor.fetchone()[0]
     conn.close()
     return {
