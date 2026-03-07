@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: claimflow
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
