@@ -7,6 +7,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
 
@@ -163,8 +165,19 @@ class UpdateStatusRequest(BaseModel):
     notes: str = ""
 
 
+# -----------------------------------------
+# SERVE DASHBOARD AT ROOT URL
+# -----------------------------------------
 @app.get("/")
-def root():
+def serve_dashboard():
+    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
+    if os.path.exists(dashboard_path):
+        return FileResponse(dashboard_path, media_type="text/html")
+    return {"message": "Medical Billing AI API is running!"}
+
+
+@app.get("/health")
+def health():
     return {"message": "Medical Billing AI API is running!"}
 
 
