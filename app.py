@@ -19,6 +19,8 @@ import jwt
 
 load_dotenv()
 
+DB_PATH = '/data/claims.db' if os.path.exists('/data') else 'claims.db'
+
 app = FastAPI()
 
 app.add_middleware(
@@ -74,7 +76,7 @@ CO_LICENSE_PATTERN = re.compile(r'^[A-Z]{2}-\d{4,8}$')
 
 
 def setup_database():
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS claims (
@@ -305,7 +307,7 @@ def serve_reset_password():
 @app.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest):
     email = req.email.strip().lower()
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT id FROM practices WHERE email = ?', (email,))
     practice = cursor.fetchone()
@@ -332,7 +334,7 @@ def forgot_password(req: ForgotPasswordRequest):
 def reset_password(req: ResetPasswordRequest):
     if len(req.new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
         'SELECT email, expires_at, used FROM password_reset_tokens WHERE token=?',
@@ -371,7 +373,7 @@ def join_waitlist(req: WaitlistRequest):
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Valid email address is required.")
     try:
-        conn = sqlite3.connect('claims.db')
+        conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         cursor.execute(
             "INSERT OR IGNORE INTO waitlist (email, state, state_code, created_at) VALUES (?,?,?,?)",
@@ -385,7 +387,7 @@ def join_waitlist(req: WaitlistRequest):
 
 @app.get("/waitlist")
 def get_waitlist(user=Depends(verify_token)):
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute("SELECT email, state, state_code, created_at FROM waitlist ORDER BY created_at DESC")
     rows = cursor.fetchall()
@@ -403,7 +405,7 @@ def register(req: RegisterRequest):
         raise HTTPException(status_code=400, detail=npi_result["error"])
     if not CO_LICENSE_PATTERN.match(req.license_number.upper()):
         raise HTTPException(status_code=400, detail="Invalid Colorado license format. Expected: DR-12345, NR-12345, or PA-12345")
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     if req.email:
         cursor.execute('SELECT id FROM practices WHERE email = ?', (req.email,))
@@ -442,7 +444,7 @@ def register(req: RegisterRequest):
 
 @app.post("/login")
 def login(req: LoginRequest):
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM practices WHERE email = ? OR phone = ?',
                    (req.identifier, req.identifier))
@@ -463,7 +465,7 @@ def process_claim(req: ProcessClaimRequest, user=Depends(verify_token)):
     codes = extract_medical_codes(req.clinical_note)
     auth_results = check_prior_auth(codes["cpt"], req.payer)
     needs_auth = [r["cpt_code"] for r in auth_results if r["requires_prior_auth"]]
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO claims
@@ -484,7 +486,7 @@ def process_claim(req: ProcessClaimRequest, user=Depends(verify_token)):
 
 @app.get("/claims")
 def get_claims(user=Depends(verify_token)):
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM claims WHERE practice_id = ? ORDER BY id DESC', (user["practice_id"],))
     rows = cursor.fetchall()
@@ -497,7 +499,7 @@ def get_claims(user=Depends(verify_token)):
 
 @app.post("/process-denial")
 def process_denial(req: DenialRequest, user=Depends(verify_token)):
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM claims WHERE id = ? AND practice_id = ?', (req.claim_id, user["practice_id"]))
     row = cursor.fetchone()
@@ -514,7 +516,7 @@ def process_denial(req: DenialRequest, user=Depends(verify_token)):
             f"ICD-10: {row[4]}\nCPT: {row[5]}"}]
     )
     appeal = response.content[0].text
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('UPDATE claims SET claim_status=?, denial_reason=?, appeal_letter=?, date_updated=? WHERE id=?',
                    ("DENIED - APPEAL IN PROGRESS", denial_info["reason"], appeal,
@@ -526,7 +528,7 @@ def process_denial(req: DenialRequest, user=Depends(verify_token)):
 @app.get("/stats")
 def get_stats(user=Depends(verify_token)):
     pid = user["practice_id"]
-    conn = sqlite3.connect('claims.db')
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id=?', (pid,))
     total = cursor.fetchone()[0]
