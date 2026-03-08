@@ -4,6 +4,7 @@ import json
 import re
 import sqlite3
 import httpx
+import secrets
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends
@@ -29,7 +30,44 @@ app.add_middleware(
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 JWT_SECRET = os.getenv("JWT_SECRET", "claimflow-super-secret-key-2026")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+APP_URL = os.getenv("APP_URL", "https://app.claimflowpay.com")
 security = HTTPBearer()
+
+
+def send_reset_email(to_email: str, reset_token: str):
+    reset_link = f"{APP_URL}/reset-password?token={reset_token}"
+    html = f"""
+    <div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;background:#04080f;color:#eef2ff;padding:40px;border-radius:12px;">
+      <div style="margin-bottom:32px;">
+        <span style="background:#00e87b;color:#000;font-weight:800;font-size:14px;padding:6px 14px;border-radius:6px;">CLAIMFLOW</span>
+      </div>
+      <h1 style="font-size:24px;font-weight:700;margin-bottom:12px;color:#eef2ff;">Reset your password</h1>
+      <p style="color:#8fa3c4;line-height:1.7;margin-bottom:32px;">
+        We received a request to reset the password for your Claimflow account. 
+        Click the button below to choose a new password. This link expires in <strong style="color:#eef2ff;">1 hour</strong>.
+      </p>
+      <a href="{reset_link}" style="display:inline-block;background:#00e87b;color:#000;font-weight:700;font-size:15px;padding:14px 28px;border-radius:10px;text-decoration:none;margin-bottom:32px;">
+        Reset Password →
+      </a>
+      <p style="color:#5a7299;font-size:13px;line-height:1.6;">
+        If you didn't request a password reset, you can safely ignore this email — your password will not change.
+      </p>
+      <hr style="border:none;border-top:1px solid #13203a;margin:28px 0;"/>
+      <p style="color:#5a7299;font-size:12px;">Claimflow · HIPAA Compliant · claimflowpay.us</p>
+    </div>
+    """
+    try:
+        response = httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={"from": "Claimflow <onboarding@resend.dev>", "to": [to_email],
+                  "subject": "Reset your Claimflow password", "html": html},
+            timeout=10
+        )
+        return response.status_code == 200
+    except Exception:
+        return False
 
 NPPES_API = "https://npiregistry.cms.hhs.gov/api/?version=2.1&number="
 CO_LICENSE_PATTERN = re.compile(r'^[A-Z]{2}-\d{4,8}$')
@@ -86,10 +124,17 @@ def setup_database():
             created_at TEXT
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expires_at TEXT NOT NULL,
+            used INTEGER DEFAULT 0
+        )
+    ''')
     conn.commit()
     conn.close()
-
-setup_database()
 
 
 def hash_password(p):
@@ -196,6 +241,13 @@ def categorize_denial(code):
     return {"denial_code": code, "reason": reason, "category": cat, "recommended_action": action}
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 class RegisterRequest(BaseModel):
     practice_name: str
     email: Optional[str] = None
@@ -244,6 +296,66 @@ def serve_login():
 def serve_dashboard():
     p = os.path.join(os.path.dirname(__file__), "dashboard.html")
     return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Dashboard not found"}
+
+@app.get("/reset-password")
+def serve_reset_password():
+    p = os.path.join(os.path.dirname(__file__), "reset-password.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Reset page not found"}
+
+@app.post("/forgot-password")
+def forgot_password(req: ForgotPasswordRequest):
+    email = req.email.strip().lower()
+    conn = sqlite3.connect('claims.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM practices WHERE email = ?', (email,))
+    practice = cursor.fetchone()
+    # Always return success to prevent email enumeration
+    if not practice:
+        conn.close()
+        return {"success": True, "message": "If that email exists, a reset link has been sent."}
+    # Generate secure token
+    token = secrets.token_urlsafe(32)
+    expires_at = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+    # Invalidate old tokens for this email
+    cursor.execute('UPDATE password_reset_tokens SET used=1 WHERE email=?', (email,))
+    cursor.execute(
+        'INSERT INTO password_reset_tokens (email, token, expires_at) VALUES (?,?,?)',
+        (email, token, expires_at)
+    )
+    conn.commit()
+    conn.close()
+    # Send email
+    sent = send_reset_email(email, token)
+    return {"success": True, "message": "If that email exists, a reset link has been sent."}
+
+@app.post("/reset-password")
+def reset_password(req: ResetPasswordRequest):
+    if len(req.new_password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    conn = sqlite3.connect('claims.db')
+    cursor = conn.cursor()
+    cursor.execute(
+        'SELECT email, expires_at, used FROM password_reset_tokens WHERE token=?',
+        (req.token,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid or expired reset link.")
+    email, expires_at, used = row
+    if used:
+        conn.close()
+        raise HTTPException(status_code=400, detail="This reset link has already been used.")
+    if datetime.now() > datetime.strptime(expires_at, "%Y-%m-%d %H:%M:%S"):
+        conn.close()
+        raise HTTPException(status_code=400, detail="This reset link has expired. Please request a new one.")
+    # Update password
+    new_hash = hash_password(req.new_password)
+    cursor.execute('UPDATE practices SET password_hash=? WHERE email=?', (new_hash, email))
+    cursor.execute('UPDATE password_reset_tokens SET used=1 WHERE token=?', (req.token,))
+    conn.commit()
+    conn.close()
+    return {"success": True, "message": "Password updated successfully. You can now log in."}
 
 @app.get("/health")
 def health():
