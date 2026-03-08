@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Claimflow — AI Medical Billing for Colorado Physicians</title>
+  <meta name="description" content="AI-powered medical billing platform built for Colorado physicians. Starting at $299/month."/>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@300;400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:#04080f; --bg2:#070d1a; --bg3:#0c1524;
+      --border:#13203a; --border2:#1e3050;
+      --text:#eef2ff; --muted:#5a7299; --sub:#8fa3c4;
+      --green:#00e87b; --green2:#00b85e;
+      --green-bg:rgba(0,232,123,.07); --green-bd:rgba(0,232,123,.2);
+      --blue:#4d9fff;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+
+    @keyframes fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
+    @keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+    @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    @keyframes typingBounce{0%,60%,100%{transform:translateY(0);opacity:.5}30%{transform:translateY(-5px);opacity:1}}
+
+    .reveal{opacity:0;transform:translateY(32px);transition:opacity .7s ease,transform .7s ease}
+    .reveal.visible{opacity:1;transform:none}
+
+    /* NAV */
+    nav{position:fixed;top:0;left:0;right:0;z-index:200;display:flex;align-items:center;justify-content:space-between;padding:0 64px;height:72px;background:rgba(4,8,15,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+    .nav-logo{font-family:'Manrope',sans-serif;font-weight:800;font-size:1.15rem;color:var(--text);text-decoration:none;display:flex;align-items:center;gap:10px}
+    .nav-logo-mark{width:28px;height:28px;background:var(--green);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:800;color:#000}
+    .nav-links{display:flex;align-items:center;gap:36px;list-style:none}
+    .nav-links a{color:var(--sub);text-decoration:none;font-size:.82rem;font-weight:500;transition:color .2s}
+    .nav-links a:hover{color:var(--text)}
+    .nav-right{display:flex;align-items:center;gap:12px}
+    .btn-ghost{color:var(--sub);font-family:'Manrope',sans-serif;font-size:.82rem;font-weight:600;text-decoration:none;padding:8px 18px;border:1px solid var(--border2);border-radius:8px;transition:all .2s}
+    .btn-ghost:hover{border-color:var(--green);color:var(--green)}
+    .btn-primary{background:var(--green);color:#000;font-family:'Manrope',sans-serif;font-size:.82rem;font-weight:700;text-decoration:none;padding:9px 22px;border-radius:8px;border:none;cursor:pointer;transition:all .2s}
+    .btn-primary:hover{background:var(--green2);box-shadow:0 4px 20px rgba(0,232,123,.3);transform:translateY(-1px)}
+
+    /* HERO */
+    .hero{min-height:100vh;display:flex;align-items:center;padding:120px 64px 80px;position:relative;overflow:hidden}
+    .hero-bg{position:absolute;inset:0;background:radial-gradient(ellipse 80% 60% at 60% 40%,rgba(0,232,123,.04) 0%,transparent 60%),radial-gradient(ellipse 40% 40% at 20% 70%,rgba(77,159,255,.04) 0%,transparent 60%)}
+    .hero-grid{position:absolute;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:80px 80px;mask-image:radial-gradient(ellipse 80% 80% at 50% 40%,black 30%,transparent 100%);opacity:.4}
+    .hero-inner{position:relative;z-index:2;display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:80px;max-width:1200px;margin:0 auto;width:100%}
+    .hero-left{max-width:580px}
+    .hero-badge{display:inline-flex;align-items:center;gap:8px;background:var(--green-bg);border:1px solid var(--green-bd);color:var(--green);padding:6px 14px;border-radius:100px;font-size:.72rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;margin-bottom:28px;animation:fadeUp .6s ease both}
+    .badge-dot{width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse-dot 2s infinite}
+    .hero h1{font-family:'Instrument Serif',serif;font-size:clamp(3rem,5vw,4.6rem);font-weight:400;line-height:1.08;letter-spacing:-.5px;margin-bottom:24px;animation:fadeUp .6s .1s ease both}
+    .hero h1 em{font-style:italic;color:var(--green)}
+    .hero-sub{font-size:1.05rem;color:var(--sub);line-height:1.75;max-width:480px;margin-bottom:40px;font-weight:400;animation:fadeUp .6s .2s ease both}
+    .hero-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;animation:fadeUp .6s .3s ease both}
+    .btn-hero{background:var(--green);color:#000;font-family:'Manrope',sans-serif;font-size:.9rem;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;border:none;cursor:pointer;transition:all .25s;display:inline-flex;align-items:center;gap:8px}
+    .btn-hero:hover{background:var(--green2);box-shadow:0 8px 32px rgba(0,232,123,.35);transform:translateY(-2px)}
+    .btn-hero-sec{color:var(--sub);font-family:'Manrope',sans-serif;font-size:.88rem;font-weight:600;text-decoration:none;padding:14px 20px;transition:color .2s;display:inline-flex;align-items:center;gap:6px}
+    .btn-hero-sec:hover{color:var(--text)}
+    .hero-card{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:32px;animation:fadeUp .7s .4s ease both}
+    .hero-card-header{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:24px;display:flex;align-items:center;gap:8px}
+    .live-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:pulse-dot 2s infinite}
+    .metric-row{display:flex;flex-direction:column;gap:12px}
+    .metric-item{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:var(--bg3);border:1px solid var(--border);border-radius:12px}
+    .metric-label{font-size:.75rem;color:var(--sub);font-weight:500}
+    .metric-val{font-size:.95rem;font-weight:700;color:var(--text);font-family:'DM Mono',monospace}
+    .metric-val.green{color:var(--green)}
+    .metric-val.blue{color:var(--blue)}
+    .hero-card-footer{margin-top:16px;padding:14px 18px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:12px;display:flex;align-items:center;justify-content:space-between}
+    .hcf-label{font-size:.75rem;color:var(--green);font-weight:600}
+    .hcf-val{font-size:1.1rem;font-weight:800;color:var(--green);font-family:'DM Mono',monospace}
+
+    /* TICKER */
+    .ticker-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:18px 0;overflow:hidden;background:var(--bg2)}
+    .ticker-inner{display:flex;gap:64px;width:max-content;animation:ticker 30s linear infinite}
+    .ticker-item{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:2px;text-transform:uppercase;white-space:nowrap;display:flex;align-items:center;gap:10px}
+    .ticker-item::before{content:'·';color:var(--green)}
+
+    /* STATS */
+    .stats{padding:100px 64px;max-width:1200px;margin:0 auto}
+    .stats-label{font-size:.72rem;font-weight:600;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:56px}
+    .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+    .stat-cell{padding:40px 36px;background:var(--bg2);border-right:1px solid var(--border);transition:background .3s}
+    .stat-cell:last-child{border-right:none}
+    .stat-cell:hover{background:var(--bg3)}
+    .stat-num{font-family:'Instrument Serif',serif;font-size:3.2rem;color:var(--text);line-height:1;margin-bottom:8px}
+    .stat-num em{color:var(--green);font-style:normal}
+    .stat-desc{font-size:.8rem;color:var(--sub);line-height:1.5;font-weight:500}
+
+    /* SECTIONS */
+    .section-wrap{padding:100px 64px;max-width:1200px;margin:0 auto}
+    .section-tag{font-size:.72rem;font-weight:700;color:var(--green);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px}
+    .section-title{font-family:'Instrument Serif',serif;font-size:clamp(2.2rem,4vw,3.4rem);font-weight:400;line-height:1.1;letter-spacing:-.3px;margin-bottom:20px}
+    .section-title em{color:var(--green);font-style:italic}
+    .section-sub{font-size:1rem;color:var(--sub);line-height:1.75;max-width:560px;margin-bottom:60px}
+
+    /* FEATURES */
+    .features-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:56px;flex-wrap:wrap;gap:24px}
+    .features-grid{display:grid;grid-template-columns:repeat(2,1fr);border:1px solid var(--border);border-radius:20px;overflow:hidden}
+    .feature-card{padding:48px 44px;background:var(--bg2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .3s}
+    .feature-card:nth-child(2n){border-right:none}
+    .feature-card:nth-child(3),.feature-card:nth-child(4){border-bottom:none}
+    .feature-card:hover{background:var(--bg3)}
+    .feature-num{font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:2px;margin-bottom:24px;font-family:'DM Mono',monospace}
+    .feature-icon-wrap{width:48px;height:48px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;margin-bottom:20px}
+    .feature-title{font-family:'Instrument Serif',serif;font-size:1.6rem;font-weight:400;margin-bottom:12px;line-height:1.2}
+    .feature-desc{font-size:.88rem;color:var(--sub);line-height:1.75}
+    .feature-tag{display:inline-block;margin-top:20px;font-size:.65rem;font-weight:700;color:var(--green);letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border:1px solid var(--green-bd);border-radius:100px}
+
+    /* HOW */
+    .how-wrap{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:100px 0}
+    .how-inner{max-width:1200px;margin:0 auto;padding:0 64px;display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:start}
+    .steps{display:flex;flex-direction:column}
+    .step{display:flex;gap:24px;padding:28px 0;border-bottom:1px solid var(--border)}
+    .step:last-child{border-bottom:none}
+    .step-num{font-family:'DM Mono',monospace;font-size:.8rem;font-weight:500;color:var(--green);min-width:32px;padding-top:3px}
+    .step-content h3{font-size:1rem;font-weight:600;color:var(--text);margin-bottom:6px}
+    .step-content p{font-size:.85rem;color:var(--sub);line-height:1.65}
+    .terminal{background:#060d1c;border:1px solid var(--border2);border-radius:16px;overflow:hidden;font-family:'DM Mono',monospace;font-size:.78rem;box-shadow:0 32px 80px rgba(0,0,0,.6);animation:float 6s ease-in-out infinite}
+    .terminal-bar{background:var(--bg3);padding:14px 20px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border)}
+    .dot{width:12px;height:12px;border-radius:50%}
+    .dot-r{background:#ff5f57}.dot-y{background:#ffbd2e}.dot-g{background:var(--green)}
+    .terminal-title{margin-left:8px;font-size:.7rem;color:var(--muted)}
+    .terminal-body{padding:24px;line-height:2}
+    .t-g{color:var(--green)}.t-b{color:var(--blue)}.t-y{color:#f4c430}.t-m{color:var(--muted)}.t-w{color:var(--text)}
+    .cursor{display:inline-block;width:8px;height:14px;background:var(--green);vertical-align:middle;animation:pulse-dot 1s infinite}
+
+    /* PAYERS */
+    .payers-grid{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-top:48px}
+    .payer-card{padding:32px 28px;background:var(--bg2);border-right:1px solid var(--border);border-bottom:1px solid var(--border);transition:background .3s;position:relative}
+    .payer-card:nth-child(3n){border-right:none}
+    .payer-card:nth-child(4),.payer-card:nth-child(5),.payer-card:nth-child(6){border-bottom:none}
+    .payer-card:hover{background:var(--bg3)}
+    .payer-id{font-family:'DM Mono',monospace;font-size:.65rem;color:var(--green);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px}
+    .payer-name{font-size:1.05rem;font-weight:700;color:var(--text);margin-bottom:6px}
+    .payer-status{font-size:.75rem;color:var(--muted)}
+    .payer-check{position:absolute;top:28px;right:24px;color:var(--green);font-size:.9rem}
+
+    /* PRICING */
+    .pricing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:48px}
+    .pricing-card{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:40px 36px;transition:border-color .3s,transform .3s;position:relative}
+    .pricing-card:hover{border-color:var(--border2);transform:translateY(-4px)}
+    .pricing-card.featured{border-color:var(--green);background:linear-gradient(160deg,rgba(0,232,123,.06),var(--bg2))}
+    .pricing-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:var(--green);color:#000;font-size:.65rem;font-weight:800;letter-spacing:1.5px;padding:4px 14px;border-radius:100px;white-space:nowrap}
+    .pricing-name{font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px}
+    .pricing-price{font-family:'Instrument Serif',serif;font-size:3.4rem;color:var(--text);line-height:1;margin-bottom:8px}
+    .pricing-price span{font-family:'Manrope',sans-serif;font-size:1rem;color:var(--muted);font-weight:400}
+    .pricing-desc{font-size:.82rem;color:var(--sub);line-height:1.6;margin-bottom:28px;padding-bottom:28px;border-bottom:1px solid var(--border)}
+    .pricing-features{list-style:none;display:flex;flex-direction:column;gap:10px;margin-bottom:32px}
+    .pricing-features li{font-size:.82rem;color:var(--muted);display:flex;align-items:center;gap:10px}
+    .pricing-features li.on{color:var(--sub)}
+    .pricing-features li.on::before{content:'✓';color:var(--green);font-weight:700;font-size:.85rem;min-width:16px}
+    .pricing-features li:not(.on)::before{content:'–';color:var(--border2);min-width:16px}
+    .pricing-btn{display:block;text-align:center;padding:13px;border:1px solid var(--border2);border-radius:10px;font-size:.85rem;font-weight:700;text-decoration:none;color:var(--sub);transition:all .2s}
+    .pricing-btn:hover{border-color:var(--green);color:var(--green)}
+    .pricing-btn.featured-btn{background:var(--green);border-color:var(--green);color:#000}
+    .pricing-btn.featured-btn:hover{background:var(--green2);border-color:var(--green2);box-shadow:0 4px 20px rgba(0,232,123,.3)}
+
+    /* CTA */
+    .cta-wrap{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:120px 64px;text-align:center;position:relative;overflow:hidden}
+    .cta-glow{position:absolute;width:700px;height:400px;background:radial-gradient(ellipse,rgba(0,232,123,.06) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none}
+    .cta-wrap h2{font-family:'Instrument Serif',serif;font-size:clamp(2.4rem,5vw,4rem);font-weight:400;line-height:1.1;margin-bottom:20px;position:relative}
+    .cta-wrap h2 em{color:var(--green);font-style:italic}
+    .cta-wrap p{font-size:1rem;color:var(--sub);max-width:500px;margin:0 auto 40px;line-height:1.7;position:relative}
+    .cta-actions{position:relative;display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}
+    .cta-fine{margin-top:16px;font-size:.72rem;color:var(--muted);position:relative}
+
+    /* FOOTER */
+    footer{padding:48px 64px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border);flex-wrap:wrap;gap:24px}
+    .footer-logo{font-weight:800;font-size:.95rem;color:var(--text);display:flex;align-items:center;gap:8px}
+    .footer-logo-mark{width:22px;height:22px;background:var(--green);border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:.58rem;font-weight:800;color:#000}
+    .footer-links{list-style:none;display:flex;gap:28px;flex-wrap:wrap}
+    .footer-links a{font-size:.8rem;color:var(--muted);text-decoration:none;font-weight:500;transition:color .2s}
+    .footer-links a:hover{color:var(--text)}
+    .footer-copy{font-size:.75rem;color:var(--muted)}
+
+    /* AI CHAT WIDGET */
+    .chat-fab{position:fixed;bottom:32px;right:32px;z-index:9999;width:56px;height:56px;background:var(--green);border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 32px rgba(0,232,123,.4);transition:all .25s}
+    .chat-fab:hover{transform:scale(1.08);box-shadow:0 12px 40px rgba(0,232,123,.55)}
+    .chat-fab svg{width:24px;height:24px}
+    .chat-fab .fab-close{display:none}
+    .chat-fab.open .fab-open{display:none}
+    .chat-fab.open .fab-close{display:block}
+    .chat-panel{position:fixed;bottom:100px;right:32px;z-index:9998;width:380px;max-height:560px;background:#070d1a;border:1px solid var(--border2);border-radius:20px;display:flex;flex-direction:column;box-shadow:0 32px 80px rgba(0,0,0,.7),0 0 0 1px rgba(0,232,123,.1);transform:translateY(20px) scale(.96);opacity:0;pointer-events:none;transition:all .3s cubic-bezier(.34,1.56,.64,1)}
+    .chat-panel.open{transform:translateY(0) scale(1);opacity:1;pointer-events:all}
+    .chat-header{padding:20px 20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px}
+    .chat-avatar{width:36px;height:36px;background:var(--green-bg);border:1px solid var(--green-bd);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:.85rem}
+    .chat-header-info{flex:1}
+    .chat-header-name{font-size:.88rem;font-weight:700;color:var(--text)}
+    .chat-header-status{font-size:.68rem;color:var(--green);display:flex;align-items:center;gap:5px;margin-top:2px}
+    .chat-header-status::before{content:'';width:6px;height:6px;background:var(--green);border-radius:50%;display:inline-block}
+    .chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;scroll-behavior:smooth}
+    .chat-messages::-webkit-scrollbar{width:4px}
+    .chat-messages::-webkit-scrollbar-track{background:transparent}
+    .chat-messages::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+    .msg{max-width:85%;padding:10px 14px;border-radius:14px;font-size:.82rem;line-height:1.55;animation:fadeUp .25s ease both}
+    .msg.bot{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px;align-self:flex-start}
+    .msg.user{background:var(--green);color:#000;font-weight:600;border-bottom-right-radius:4px;align-self:flex-end}
+    .msg-typing{display:flex;gap:4px;padding:12px 16px;background:var(--bg3);border:1px solid var(--border);border-radius:14px;border-bottom-left-radius:4px;align-self:flex-start;align-items:center}
+    .typing-dot{width:6px;height:6px;background:var(--muted);border-radius:50%;animation:typingBounce 1.2s infinite}
+    .typing-dot:nth-child(2){animation-delay:.15s}
+    .typing-dot:nth-child(3){animation-delay:.3s}
+    .chat-suggestions{padding:0 16px 12px;display:flex;flex-wrap:wrap;gap:6px}
+    .suggestion-chip{background:var(--bg3);border:1px solid var(--border2);color:var(--sub);padding:5px 11px;border-radius:100px;font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s;font-family:'Manrope',sans-serif}
+    .suggestion-chip:hover{border-color:var(--green);color:var(--green)}
+    .chat-input-wrap{padding:12px 16px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:flex-end}
+    .chat-input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:12px;padding:10px 14px;color:var(--text);font-family:'Manrope',sans-serif;font-size:.82rem;resize:none;outline:none;line-height:1.5;max-height:100px;transition:border-color .2s}
+    .chat-input:focus{border-color:var(--green)}
+    .chat-input::placeholder{color:var(--muted)}
+    .chat-send{width:36px;height:36px;background:var(--green);border:none;border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;flex-shrink:0}
+    .chat-send:hover{background:var(--green2);transform:scale(1.05)}
+    .chat-send svg{width:16px;height:16px}
+    .chat-send:disabled{background:var(--border2);cursor:not-allowed;transform:none}
+
+    @media(max-width:900px){
+      nav{padding:0 24px}
+      .nav-links{display:none}
+      .hero{padding:100px 24px 64px}
+      .hero-inner{grid-template-columns:1fr;gap:48px}
+      .stats{padding:64px 24px}
+      .stats-grid{grid-template-columns:repeat(2,1fr)}
+      .stat-cell:nth-child(2){border-right:none}
+      .section-wrap{padding:64px 24px}
+      .features-grid{grid-template-columns:1fr}
+      .feature-card{border-right:none !important;border-bottom:1px solid var(--border) !important}
+      .how-inner{grid-template-columns:1fr;padding:0 24px}
+      .how-wrap{padding:64px 0}
+      .payers-grid{grid-template-columns:repeat(2,1fr)}
+      .payer-card:nth-child(2n){border-right:none}
+      .pricing-grid{grid-template-columns:1fr}
+      .cta-wrap{padding:80px 24px}
+      footer{padding:40px 24px;flex-direction:column;align-items:flex-start}
+      .chat-panel{width:calc(100vw - 32px);right:16px;bottom:90px}
+      .chat-fab{right:16px;bottom:20px}
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <a href="/" class="nav-logo"><div class="nav-logo-mark">CF</div>Claimflow</a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#payers">Payers</a></li>
+  </ul>
+  <div class="nav-right">
+    <a href="https://app.claimflowpay.com" class="btn-ghost">Sign in</a>
+    <a href="https://app.claimflowpay.com" class="btn-primary">Get started</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-inner">
+    <div class="hero-left">
+      <div class="hero-badge"><div class="badge-dot"></div>Now live in Colorado</div>
+      <h1>AI billing built for<br/><em>Colorado physicians</em></h1>
+      <p class="hero-sub">Claimflow uses AI to code your claims, check prior authorizations, and write denial appeals — so you spend more time with patients and less time on paperwork.</p>
+      <div class="hero-actions">
+        <a href="https://app.claimflowpay.com" class="btn-hero">Start free trial →</a>
+        <a href="#how" class="btn-hero-sec">See how it works ↓</a>
+      </div>
+    </div>
+    <div class="hero-card">
+      <div class="hero-card-header"><div class="live-dot"></div>Live claim processing</div>
+      <div class="metric-row">
+        <div class="metric-item"><span class="metric-label">Patient</span><span class="metric-val">Jane D. · UnitedHealthcare</span></div>
+        <div class="metric-item"><span class="metric-label">ICD-10 codes</span><span class="metric-val blue">E11.9 · I10</span></div>
+        <div class="metric-item"><span class="metric-label">CPT codes</span><span class="metric-val blue">99214 · 83036</span></div>
+        <div class="metric-item"><span class="metric-label">Prior auth required</span><span class="metric-val green">None needed ✓</span></div>
+        <div class="metric-item"><span class="metric-label">Processing time</span><span class="metric-val">1.2 seconds</span></div>
+      </div>
+      <div class="hero-card-footer"><span class="hcf-label">Claim status</span><span class="hcf-val">SUBMITTED ✓</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="ticker-wrap">
+  <div class="ticker-inner">
+    <span class="ticker-item">AI Medical Coding</span><span class="ticker-item">Prior Authorization Engine</span><span class="ticker-item">Denial Appeal Letters</span><span class="ticker-item">BCBS Colorado</span><span class="ticker-item">Aetna · Cigna · UnitedHealthcare</span><span class="ticker-item">Colorado Medicaid</span><span class="ticker-item">Medicare Part B</span><span class="ticker-item">ICD-10 · CPT Coding</span><span class="ticker-item">AI Medical Coding</span><span class="ticker-item">Prior Authorization Engine</span><span class="ticker-item">Denial Appeal Letters</span><span class="ticker-item">BCBS Colorado</span><span class="ticker-item">Aetna · Cigna · UnitedHealthcare</span><span class="ticker-item">Colorado Medicaid</span><span class="ticker-item">Medicare Part B</span><span class="ticker-item">ICD-10 · CPT Coding</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stats-label reveal">Platform performance</div>
+  <div class="stats-grid">
+    <div class="stat-cell reveal"><div class="stat-num">98<em>%</em></div><div class="stat-desc">Clean claim rate on first submission</div></div>
+    <div class="stat-cell reveal"><div class="stat-num">2.4<em>×</em></div><div class="stat-desc">Faster reimbursement vs manual billing</div></div>
+    <div class="stat-cell reveal"><div class="stat-num"><em>$</em>0</div><div class="stat-desc">Setup cost — no contracts, no onboarding fee</div></div>
+    <div class="stat-cell reveal"><div class="stat-num">6</div><div class="stat-desc">Major Colorado payers — fully configured</div></div>
+  </div>
+</div>
+
+<section class="section-wrap" id="features">
+  <div class="features-header">
+    <div>
+      <div class="section-tag reveal">Four AI modules</div>
+      <h2 class="section-title reveal">Everything your practice<br/>needs to get <em>paid</em></h2>
+    </div>
+    <p class="section-sub reveal" style="margin-bottom:0">From clinical note to clean claim — every step powered by AI trained on CMS guidelines and Colorado payer rules.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feature-num">01</div>
+      <div class="feature-icon-wrap">🧠</div>
+      <h3 class="feature-title">AI Medical Coding</h3>
+      <p class="feature-desc">Paste your clinical note and Claimflow extracts every ICD-10 and CPT code in seconds. Trained on official CMS guidelines. No manual lookups, no missed codes.</p>
+      <span class="feature-tag">ICD-10 · CPT codes</span>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-num">02</div>
+      <div class="feature-icon-wrap">🔒</div>
+      <h3 class="feature-title">Prior Auth Engine</h3>
+      <p class="feature-desc">Every CPT code is automatically checked against your specific payer's authorization matrix before submission. No more surprise denials for missing prior auth.</p>
+      <span class="feature-tag">Real-time auth check</span>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-num">03</div>
+      <div class="feature-icon-wrap">📋</div>
+      <h3 class="feature-title">Claim Tracking</h3>
+      <p class="feature-desc">Track every claim from submission to payment in one place. Status updates, notes, and full audit trail — with complete data isolation per practice.</p>
+      <span class="feature-tag">6 Colorado payers</span>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-num">04</div>
+      <div class="feature-icon-wrap">⚡</div>
+      <h3 class="feature-title">AI Denial Appeals</h3>
+      <p class="feature-desc">When claims get denied, AI writes professional, payer-specific appeal letters in seconds. Knows every denial code — CO-4, CO-11, CO-29, PR-96 and more.</p>
+      <span class="feature-tag">Instant appeal letters</span>
+    </div>
+  </div>
+</section>
+
+<div class="how-wrap" id="how">
+  <div class="how-inner">
+    <div>
+      <div class="section-tag reveal">How it works</div>
+      <h2 class="section-title reveal">From clinical note<br/>to clean claim<br/><em>in seconds</em></h2>
+      <div class="steps">
+        <div class="step reveal"><div class="step-num">01</div><div class="step-content"><h3>Paste your clinical note</h3><p>Copy your SOAP note or clinical documentation directly into Claimflow — no reformatting required.</p></div></div>
+        <div class="step reveal"><div class="step-num">02</div><div class="step-content"><h3>AI extracts all codes</h3><p>Our AI reads your note and extracts every ICD-10 and CPT code following official CMS guidelines.</p></div></div>
+        <div class="step reveal"><div class="step-num">03</div><div class="step-content"><h3>Prior auth checked instantly</h3><p>Every code is automatically checked against your payer's authorization requirements before submission.</p></div></div>
+        <div class="step reveal"><div class="step-num">04</div><div class="step-content"><h3>Submit with confidence</h3><p>Your clean claim goes out. If it gets denied, AI writes the appeal letter in seconds.</p></div></div>
+      </div>
+    </div>
+    <div class="terminal reveal">
+      <div class="terminal-bar"><div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div><span class="terminal-title">claimflow — process-claim</span></div>
+      <div class="terminal-body">
+        <div><span class="t-m">// Processing clinical note...</span></div>
+        <div><span class="t-g">✓</span> <span class="t-w">AI coding complete</span></div>
+        <div>&nbsp;</div>
+        <div><span class="t-m">ICD-10 CODES:</span></div>
+        <div>&nbsp;&nbsp;<span class="t-b">E11.9</span> <span class="t-m">— Type 2 diabetes mellitus</span></div>
+        <div>&nbsp;&nbsp;<span class="t-b">I10</span>&nbsp;&nbsp;&nbsp;<span class="t-m">— Essential hypertension</span></div>
+        <div>&nbsp;</div>
+        <div><span class="t-m">CPT CODES:</span></div>
+        <div>&nbsp;&nbsp;<span class="t-y">99214</span> <span class="t-m">— Office visit, moderate complexity</span></div>
+        <div>&nbsp;&nbsp;<span class="t-y">83036</span> <span class="t-m">— Hemoglobin A1c test</span></div>
+        <div>&nbsp;</div>
+        <div><span class="t-m">PRIOR AUTH — UnitedHealthcare:</span></div>
+        <div>&nbsp;&nbsp;<span class="t-g">✓</span> <span class="t-w">99214</span> <span class="t-g">NO AUTH NEEDED</span></div>
+        <div>&nbsp;&nbsp;<span class="t-g">✓</span> <span class="t-w">83036</span> <span class="t-g">NO AUTH NEEDED</span></div>
+        <div>&nbsp;</div>
+        <div><span class="t-g">✓ CLAIM #1042 SUBMITTED</span> <span class="cursor"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<section class="section-wrap" id="payers">
+  <div class="section-tag reveal">Colorado payers</div>
+  <h2 class="section-title reveal">Every major Colorado payer.<br/><em>Out of the box.</em></h2>
+  <p class="section-sub reveal">No configuration needed. Claimflow ships with correct payer IDs and prior auth rules for every major Colorado insurer.</p>
+  <div class="payers-grid">
+    <div class="payer-card reveal"><span class="payer-check">✓</span><div class="payer-id">Payer ID · 00050</div><div class="payer-name">BCBS Colorado</div><div class="payer-status">BlueCross BlueShield of Colorado · Full support</div></div>
+    <div class="payer-card reveal"><span class="payer-check">✓</span><div class="payer-id">Payer ID · 60054</div><div class="payer-name">Aetna</div><div class="payer-status">Aetna Colorado · Full support</div></div>
+    <div class="payer-card reveal"><span class="payer-check">✓</span><div class="payer-id">Payer ID · 62308</div><div class="payer-name">Cigna</div><div class="payer-status">Cigna Colorado · Full support</div></div>
+    <div class="payer-card reveal"><span class="payer-check">✓</span><div class="payer-id">Payer ID · 87726</div><div class="payer-name">UnitedHealthcare</div><div class="payer-status">UHC Colorado · Full support</div></div>
+    <div class="payer-card reveal"><span class="payer-check">✓</span><div class="payer-id">Colorado Medicaid</div><div class="payer-name">Colorado Medicaid</div><div class="payer-status">Dept. of Health Care Policy · Full support</div></div>
+    <div class="payer-card reveal"><span class="payer-check">✓</span><div class="payer-id">Medicare Part B</div><div class="payer-name">Medicare Part B</div><div class="payer-status">CMS Medicare · Full support</div></div>
+  </div>
+</section>
+
+<section class="section-wrap" id="pricing">
+  <div class="section-tag reveal">Pricing</div>
+  <h2 class="section-title reveal">Simple pricing.<br/><em>No surprises.</em></h2>
+  <p class="section-sub reveal">Every plan includes all four AI modules. Pick the size that fits your practice.</p>
+  <div class="pricing-grid">
+    <div class="pricing-card reveal">
+      <div class="pricing-name">Starter</div>
+      <div class="pricing-price">$299<span>/mo</span></div>
+      <div class="pricing-desc">Perfect for solo physicians just getting started with AI billing.</div>
+      <ul class="pricing-features">
+        <li class="on">AI medical coding</li><li class="on">Prior auth engine</li><li class="on">Denial appeal letters</li><li class="on">Up to 100 claims/month</li><li class="on">All 6 Colorado payers</li><li>EDI 837 submission</li><li>Phone support</li>
+      </ul>
+      <a href="https://app.claimflowpay.com" class="pricing-btn">Get started →</a>
+    </div>
+    <div class="pricing-card featured reveal">
+      <div class="pricing-badge">Most popular</div>
+      <div class="pricing-name">Professional</div>
+      <div class="pricing-price">$599<span>/mo</span></div>
+      <div class="pricing-desc">For growing practices that need unlimited claims and direct submission.</div>
+      <ul class="pricing-features">
+        <li class="on">Everything in Starter</li><li class="on">Unlimited claims</li><li class="on">EDI 837 submission</li><li class="on">ERA 835 processing</li><li class="on">Priority email support</li><li class="on">Claims analytics dashboard</li><li>Dedicated account manager</li>
+      </ul>
+      <a href="https://app.claimflowpay.com" class="pricing-btn featured-btn">Get started →</a>
+    </div>
+    <div class="pricing-card reveal">
+      <div class="pricing-name">Practice</div>
+      <div class="pricing-price">$999<span>/mo</span></div>
+      <div class="pricing-desc">For practices with multiple providers who need dedicated support.</div>
+      <ul class="pricing-features">
+        <li class="on">Everything in Professional</li><li class="on">Up to 5 providers</li><li class="on">Dedicated account manager</li><li class="on">Custom payer rules</li><li class="on">Phone support</li><li class="on">Onboarding assistance</li><li class="on">SLA guarantee</li>
+      </ul>
+      <a href="https://app.claimflowpay.com" class="pricing-btn">Get started →</a>
+    </div>
+  </div>
+</section>
+
+<div class="cta-wrap">
+  <div class="cta-glow"></div>
+  <h2 class="reveal">Ready to stop leaving<br/><em>money on the table?</em></h2>
+  <p class="reveal">Join Colorado physicians already using Claimflow to get paid faster, reduce denials, and spend less time on billing.</p>
+  <div class="cta-actions reveal"><a href="https://app.claimflowpay.com" class="btn-hero">Start free trial →</a></div>
+  <p class="cta-fine reveal">No credit card required · Setup in 5 minutes · Cancel anytime</p>
+</div>
+
+<footer>
+  <div class="footer-logo"><div class="footer-logo-mark">CF</div>Claimflow</div>
+  <ul class="footer-links">
+    <li><a href="#features">Features</a></li><li><a href="#pricing">Pricing</a></li><li><a href="#payers">Payers</a></li><li><a href="https://app.claimflowpay.com">Login</a></li><li><a href="mailto:support@claimflowpay.com">Support</a></li>
+  </ul>
+  <div class="footer-copy">© 2026 Claimflow · HIPAA Compliant · Colorado</div>
+</footer>
+
+<!-- AI CHAT WIDGET -->
+<button class="chat-fab" id="chatFab" onclick="toggleChat()">
+  <svg class="fab-open" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  <svg class="fab-close" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+</button>
+
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-header">
+    <div class="chat-avatar">🧠</div>
+    <div class="chat-header-info">
+      <div class="chat-header-name">Claimflow AI</div>
+      <div class="chat-header-status">Online &amp; ready to help</div>
+    </div>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="msg bot">Hi! I'm Claimflow's AI assistant. Ask me anything about our medical billing platform — pricing, features, how it works, or whether it's right for your practice.</div>
+  </div>
+  <div class="chat-suggestions" id="chatSuggestions">
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">How does pricing work?</button>
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">Which payers are supported?</button>
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">How does AI coding work?</button>
+    <button class="suggestion-chip" onclick="sendSuggestion(this)">Is it HIPAA compliant?</button>
+  </div>
+  <div class="chat-input-wrap">
+    <textarea class="chat-input" id="chatInput" placeholder="Ask a question..." rows="1" onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+    <button class="chat-send" id="chatSend" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => { if(e.isIntersecting){ e.target.classList.add('visible'); observer.unobserve(e.target); } });
+  }, {threshold:.08});
+  reveals.forEach(el => observer.observe(el));
+
+  // Nav highlight
+  const navLinks = document.querySelectorAll('.nav-links a');
+  const sections = document.querySelectorAll('section[id],div[id]');
+  window.addEventListener('scroll', () => {
+    let curr = '';
+    sections.forEach(s => { if(window.scrollY >= s.offsetTop - 100) curr = s.id; });
+    navLinks.forEach(a => { a.style.color = a.getAttribute('href') === '#'+curr ? 'var(--text)' : ''; });
+  });
+
+  // AI Chat
+  const SYSTEM = `You are a helpful AI assistant for Claimflow, an AI medical billing SaaS for Colorado physicians (expanding nationally). Be friendly, concise, and accurate. Only answer questions about Claimflow.
+
+Key facts:
+- Automates ICD-10/CPT coding, prior auth checking, claim tracking, and denial appeal letters
+- Built for Colorado solo physicians and small practices
+- Supports 6 payers: BCBS CO (00050), Aetna (60054), Cigna (62308), UHC (87726), Colorado Medicaid, Medicare Part B
+- Pricing: Starter $299/mo (100 claims), Professional $599/mo (unlimited), Practice $999/mo (5 providers), Enterprise $2,999/mo
+- HIPAA compliant, $0 setup, no contracts, cancel anytime
+- Sign up at app.claimflowpay.com — NPI verification required
+- Powered by Claude AI (Anthropic)
+Keep answers under 3 sentences unless detail is truly needed.`;
+
+  let history = [];
+  let busy = false;
+
+  function toggleChat() {
+    document.getElementById('chatFab').classList.toggle('open');
+    document.getElementById('chatPanel').classList.toggle('open');
+    if(document.getElementById('chatPanel').classList.contains('open'))
+      setTimeout(() => document.getElementById('chatInput').focus(), 300);
+  }
+
+  function sendSuggestion(btn) {
+    document.getElementById('chatSuggestions').style.display = 'none';
+    sendMessage(btn.textContent);
+  }
+
+  function handleKey(e) {
+    if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+  }
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+  }
+
+  function addMsg(text, role) {
+    const msgs = document.getElementById('chatMessages');
+    const d = document.createElement('div');
+    d.className = 'msg ' + role;
+    d.textContent = text;
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  function showTyping() {
+    const msgs = document.getElementById('chatMessages');
+    const d = document.createElement('div');
+    d.className = 'msg-typing'; d.id = 'typing';
+    d.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+    msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  async function sendMessage(override) {
+    const input = document.getElementById('chatInput');
+    const text = (override || input.value).trim();
+    if(!text || busy) return;
+    input.value = ''; input.style.height = 'auto';
+    busy = true; document.getElementById('chatSend').disabled = true;
+    addMsg(text, 'user');
+    history.push({role:'user', content:text});
+    showTyping();
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({model:'claude-sonnet-4-20250514', max_tokens:600, system:SYSTEM, messages:history})
+      });
+      const data = await res.json();
+      const reply = data.content?.[0]?.text || 'Sorry, I had trouble responding. Please try again.';
+      document.getElementById('typing')?.remove();
+      addMsg(reply, 'bot');
+      history.push({role:'assistant', content:reply});
+    } catch(e) {
+      document.getElementById('typing')?.remove();
+      addMsg('Connection error. Please try again.', 'bot');
+    }
+    busy = false; document.getElementById('chatSend').disabled = false;
+    document.getElementById('chatInput').focus();
+  }
+</script>
+</body>
+</html>
