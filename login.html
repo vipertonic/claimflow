@@ -153,7 +153,7 @@
 
       <!-- NPI Field with live verification -->
       <div class="form-group">
-        <label>NPI Number<span class="req">*</span> — 10 digits</label>
+        <label>NPI Number — REQUIRED<span class="req">*</span></label>
         <div class="npi-wrap">
           <input type="text" id="rNPI" placeholder="1234567890" maxlength="10"
                  oninput="onNPIInput(this.value)"/>
@@ -161,6 +161,16 @@
         </div>
         <div class="hint">Verified in real time against the national NPPES registry</div>
       </div>
+
+      <!-- Colorado License Field -->
+      <div class="form-group">
+        <label>Colorado Medical License #<span class="req">*</span></label>
+        <input type="text" id="rLicense" placeholder="DR-12345"
+               oninput="onLicenseInput(this.value)" style="text-transform:uppercase"/>
+        <div id="licenseStatus" class="license-status"></div>
+        <div class="hint">Format: DR-##### (physician) · NR-##### (nurse) · PA-##### (physician assistant)</div>
+      </div>
+
 
       <!-- Colorado License Field -->
       <div class="form-group">
