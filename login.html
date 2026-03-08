@@ -331,14 +331,30 @@
     }
   }
 
-  function joinWaitlist(){
-    var email=document.getElementById('waitlistEmail').value.trim();
-    if(!email||!email.includes('@')){alert('Please enter a valid email address.');return;}
-    document.getElementById('waitlistSuccess').style.display='block';
-    document.getElementById('waitlistEmail').disabled=true;
-    document.querySelector('.waitlist-btn').disabled=true;
-    console.log('Waitlist signup:',email);
-    // TODO: POST to /waitlist endpoint when built
+  async function joinWaitlist() {
+    const email = document.getElementById('waitlistEmail').value.trim();
+    if (!email || !email.includes('@')) { alert('Please enter a valid email address.'); return; }
+    try {
+      const res = await fetch('/waitlist', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          email: email,
+          state: detectedState,
+          state_code: detectedStateCode
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        document.getElementById('waitlistEmail').value = '';
+        document.getElementById('waitlistSuccess').style.display = 'block';
+        document.getElementById('waitlistEmail').disabled = true;
+        document.querySelector('.waitlist-btn').disabled = true;
+        alert("You're on the list! We'll notify you when Claimflow launches in your state.");
+      }
+    } catch(e) {
+      alert("Something went wrong. Please try again.");
+    }
   }
 
   // Redirect if already logged in
