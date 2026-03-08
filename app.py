@@ -32,14 +32,9 @@ JWT_SECRET = os.getenv("JWT_SECRET", "claimflow-super-secret-key-2026")
 security = HTTPBearer()
 
 NPPES_API = "https://npiregistry.cms.hhs.gov/api/?version=2.1&number="
-
-# Colorado license format: 2 uppercase letters, dash, digits  e.g. DR-12345
 CO_LICENSE_PATTERN = re.compile(r'^[A-Z]{2}-\d{4,8}$')
 
 
-# -----------------------------------------
-# DATABASE SETUP
-# -----------------------------------------
 def setup_database():
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
@@ -82,15 +77,21 @@ def setup_database():
             is_active INTEGER DEFAULT 1
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS waitlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            state TEXT,
+            state_code TEXT,
+            created_at TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
 setup_database()
 
 
-# -----------------------------------------
-# AUTH HELPERS
-# -----------------------------------------
 def hash_password(p):
     return bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()
 
@@ -111,13 +112,7 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid token. Please login again.")
 
 
-# -----------------------------------------
-# NPI VERIFICATION via NPPES
-# -----------------------------------------
 def verify_npi(npi: str):
-    """
-    Returns dict with keys: valid (bool), name (str), type (str), state (str), error (str)
-    """
     if not npi or len(npi) != 10 or not npi.isdigit():
         return {"valid": False, "error": "NPI must be exactly 10 digits."}
     try:
@@ -125,46 +120,34 @@ def verify_npi(npi: str):
         data = response.json()
         results = data.get("results", [])
         if not results:
-            return {"valid": False, "error": "NPI not found in the national registry. Please check and try again."}
-
+            return {"valid": False, "error": "NPI not found in the national registry."}
         result = results[0]
         basic = result.get("basic", {})
         enumeration_type = result.get("enumeration_type", "")
-
-        # Get provider name
-        if enumeration_type == "NPI-1":  # Individual
+        if enumeration_type == "NPI-1":
             first = basic.get("first_name", "")
             last = basic.get("last_name", "")
             credential = basic.get("credential", "")
             name = f"{first} {last}, {credential}".strip(", ")
             provider_type = "Individual Provider"
-        else:  # NPI-2 = Organization
+        else:
             name = basic.get("organization_name", "")
             provider_type = "Organization"
-
-        # Get state from addresses
         addresses = result.get("addresses", [])
         state = ""
         for addr in addresses:
             if addr.get("address_purpose") == "LOCATION":
                 state = addr.get("state", "")
                 break
-
-        status = basic.get("status", "")
-        if status != "A":
-            return {"valid": False, "error": "This NPI is no longer active in the national registry."}
-
+        if basic.get("status", "") != "A":
+            return {"valid": False, "error": "This NPI is no longer active."}
         return {"valid": True, "name": name, "type": provider_type, "state": state, "error": None}
-
     except httpx.TimeoutException:
         return {"valid": False, "error": "NPI verification timed out. Please try again."}
-    except Exception as e:
-        return {"valid": False, "error": "NPI verification service unavailable. Please try again."}
+    except Exception:
+        return {"valid": False, "error": "NPI verification service unavailable."}
 
 
-# -----------------------------------------
-# AI MODULES
-# -----------------------------------------
 def extract_medical_codes(clinical_note):
     response = client.messages.create(
         model="claude-opus-4-6", max_tokens=1000,
@@ -213,9 +196,6 @@ def categorize_denial(code):
     return {"denial_code": code, "reason": reason, "category": cat, "recommended_action": action}
 
 
-# -----------------------------------------
-# REQUEST MODELS
-# -----------------------------------------
 class RegisterRequest(BaseModel):
     practice_name: str
     email: Optional[str] = None
@@ -234,6 +214,11 @@ class LoginRequest(BaseModel):
 class VerifyNPIRequest(BaseModel):
     npi: str
 
+class WaitlistRequest(BaseModel):
+    email: str
+    state: Optional[str] = ""
+    state_code: Optional[str] = ""
+
 class ProcessClaimRequest(BaseModel):
     patient_name: str
     date_of_service: str
@@ -250,9 +235,6 @@ class UpdateStatusRequest(BaseModel):
     notes: str = ""
 
 
-# -----------------------------------------
-# PAGES
-# -----------------------------------------
 @app.get("/")
 def serve_login():
     p = os.path.join(os.path.dirname(__file__), "login.html")
@@ -267,56 +249,64 @@ def serve_dashboard():
 def health():
     return {"message": "Claimflow API is running!"}
 
-
-# -----------------------------------------
-# PUBLIC: NPI LOOKUP ENDPOINT
-# -----------------------------------------
 @app.post("/verify-npi")
 def verify_npi_endpoint(req: VerifyNPIRequest):
-    result = verify_npi(req.npi)
-    return result
+    return verify_npi(req.npi)
 
+@app.post("/waitlist")
+def join_waitlist(req: WaitlistRequest):
+    email = req.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Valid email address is required.")
+    try:
+        conn = sqlite3.connect('claims.db')
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO waitlist (email, state, state_code, created_at) VALUES (?,?,?,?)",
+            (email, req.state, req.state_code, datetime.now().strftime("%Y-%m-%d %H:%M"))
+        )
+        conn.commit()
+        conn.close()
+        return {"success": True, "message": "You're on the waitlist!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-# -----------------------------------------
-# AUTH ENDPOINTS
-# -----------------------------------------
+@app.get("/waitlist")
+def get_waitlist(user=Depends(verify_token)):
+    conn = sqlite3.connect('claims.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT email, state, state_code, created_at FROM waitlist ORDER BY created_at DESC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [{"email": r[0], "state": r[1], "state_code": r[2], "signed_up": r[3]} for r in rows]
+
 @app.post("/register")
 def register(req: RegisterRequest):
     if not req.email and not req.phone:
         raise HTTPException(status_code=400, detail="Email or phone number is required.")
     if len(req.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
-
-    # Verify NPI via NPPES
     npi_result = verify_npi(req.npi)
     if not npi_result["valid"]:
         raise HTTPException(status_code=400, detail=npi_result["error"])
-
-    # Verify Colorado license format
     if not CO_LICENSE_PATTERN.match(req.license_number.upper()):
-        raise HTTPException(status_code=400,
-            detail="Invalid Colorado license format. Expected format: DR-12345, NR-12345, or PA-12345")
-
+        raise HTTPException(status_code=400, detail="Invalid Colorado license format. Expected: DR-12345, NR-12345, or PA-12345")
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-
     if req.email:
         cursor.execute('SELECT id FROM practices WHERE email = ?', (req.email,))
         if cursor.fetchone():
             conn.close()
             raise HTTPException(status_code=400, detail="An account with this email already exists.")
-
     if req.phone:
         cursor.execute('SELECT id FROM practices WHERE phone = ?', (req.phone,))
         if cursor.fetchone():
             conn.close()
             raise HTTPException(status_code=400, detail="An account with this phone number already exists.")
-
     cursor.execute('SELECT id FROM practices WHERE npi = ?', (req.npi,))
     if cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="An account with this NPI already exists.")
-
     password_hash = hash_password(req.password)
     cursor.execute('''
         INSERT INTO practices
@@ -326,24 +316,17 @@ def register(req: RegisterRequest):
     ''', (
         req.practice_name, req.email, req.phone, password_hash,
         req.npi, npi_result.get("name", ""), npi_result.get("type", ""),
-        req.license_number.upper(),
-        req.address, req.city, req.zip,
+        req.license_number.upper(), req.address, req.city, req.zip,
         datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
     practice_id = cursor.lastrowid
     conn.commit()
     conn.close()
-
     identifier = req.email or req.phone
     token = create_token(practice_id, identifier)
-    return {
-        "message": "Account created successfully!",
-        "token": token,
-        "practice_name": req.practice_name,
-        "identifier": identifier,
-        "verified_provider": npi_result.get("name", "")
-    }
-
+    return {"message": "Account created successfully!", "token": token,
+            "practice_name": req.practice_name, "identifier": identifier,
+            "verified_provider": npi_result.get("name", "")}
 
 @app.post("/login")
 def login(req: LoginRequest):
@@ -353,28 +336,21 @@ def login(req: LoginRequest):
                    (req.identifier, req.identifier))
     practice = cursor.fetchone()
     conn.close()
-
     if not practice or not verify_password(req.password, practice[4]):
-        raise HTTPException(status_code=401, detail="Invalid credentials. Please check your email/phone and password.")
+        raise HTTPException(status_code=401, detail="Invalid credentials.")
     if not practice[15]:
-        raise HTTPException(status_code=401, detail="Account is inactive. Please contact support.")
-
+        raise HTTPException(status_code=401, detail="Account is inactive.")
     identifier = practice[2] or practice[3]
     token = create_token(practice[0], identifier)
     return {"message": "Login successful!", "token": token,
             "practice_name": practice[1], "identifier": identifier}
 
-
-# -----------------------------------------
-# PROTECTED ENDPOINTS
-# -----------------------------------------
 @app.post("/process-claim")
 def process_claim(req: ProcessClaimRequest, user=Depends(verify_token)):
     pid = user["practice_id"]
     codes = extract_medical_codes(req.clinical_note)
     auth_results = check_prior_auth(codes["cpt"], req.payer)
     needs_auth = [r["cpt_code"] for r in auth_results if r["requires_prior_auth"]]
-
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
     cursor.execute('''
@@ -384,20 +360,15 @@ def process_claim(req: ProcessClaimRequest, user=Depends(verify_token)):
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     ''', (pid, req.patient_name, req.date_of_service,
           json.dumps(codes["icd10"]), json.dumps(codes["cpt"]), req.payer,
-          "YES" if needs_auth else "NO",
-          "PENDING" if needs_auth else "NOT REQUIRED",
-          "SUBMITTED",
-          datetime.now().strftime("%Y-%m-%d %H:%M"),
+          "YES" if needs_auth else "NO", "PENDING" if needs_auth else "NOT REQUIRED",
+          "SUBMITTED", datetime.now().strftime("%Y-%m-%d %H:%M"),
           datetime.now().strftime("%Y-%m-%d %H:%M"),
           "Auth needed: " + str(needs_auth) if needs_auth else "No auth required"))
     claim_id = cursor.lastrowid
     conn.commit()
     conn.close()
-
     return {"claim_id": claim_id, "icd10_codes": codes["icd10"], "cpt_codes": codes["cpt"],
-            "auth_results": auth_results,
-            "prior_auth_required": "YES" if needs_auth else "NO", "status": "SUBMITTED"}
-
+            "auth_results": auth_results, "prior_auth_required": "YES" if needs_auth else "NO", "status": "SUBMITTED"}
 
 @app.get("/claims")
 def get_claims(user=Depends(verify_token)):
@@ -407,12 +378,10 @@ def get_claims(user=Depends(verify_token)):
     rows = cursor.fetchall()
     conn.close()
     return [{"id": r[0], "patient_name": r[2], "date_of_service": r[3],
-             "icd10_codes": json.loads(r[4]) if r[4] else [],
-             "cpt_codes": json.loads(r[5]) if r[5] else [],
+             "icd10_codes": json.loads(r[4]) if r[4] else [], "cpt_codes": json.loads(r[5]) if r[5] else [],
              "payer": r[6], "prior_auth_required": r[7], "prior_auth_status": r[8],
              "claim_status": r[9], "date_submitted": r[10], "date_updated": r[11],
              "notes": r[12], "denial_reason": r[13], "appeal_letter": r[14]} for r in rows]
-
 
 @app.post("/process-denial")
 def process_denial(req: DenialRequest, user=Depends(verify_token)):
@@ -423,7 +392,6 @@ def process_denial(req: DenialRequest, user=Depends(verify_token)):
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="Claim not found")
-
     denial_info = categorize_denial(req.denial_code)
     response = client.messages.create(
         model="claude-opus-4-6", max_tokens=1500,
@@ -434,7 +402,6 @@ def process_denial(req: DenialRequest, user=Depends(verify_token)):
             f"ICD-10: {row[4]}\nCPT: {row[5]}"}]
     )
     appeal = response.content[0].text
-
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
     cursor.execute('UPDATE claims SET claim_status=?, denial_reason=?, appeal_letter=?, date_updated=? WHERE id=?',
@@ -443,7 +410,6 @@ def process_denial(req: DenialRequest, user=Depends(verify_token)):
     conn.commit()
     conn.close()
     return {"denial_info": denial_info, "appeal_letter": appeal}
-
 
 @app.get("/stats")
 def get_stats(user=Depends(verify_token)):
@@ -461,8 +427,7 @@ def get_stats(user=Depends(verify_token)):
     cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id=? AND prior_auth_required="YES"', (pid,))
     auth_req = cursor.fetchone()[0]
     conn.close()
-    return {"total": total, "submitted": submitted, "approved": approved,
-            "denied": denied, "auth_required": auth_req}
+    return {"total": total, "submitted": submitted, "approved": approved, "denied": denied, "auth_required": auth_req}
 
 
 if __name__ == "__main__":
