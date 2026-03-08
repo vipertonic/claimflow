@@ -7,3 +7,4 @@ pyjwt
 httpx
 aiofiles
 pydantic
+resend
