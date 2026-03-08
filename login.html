@@ -39,18 +39,6 @@
     .alert.success{background:#051a0d;border:1px solid #00ff88;color:#00ff88;}
     .footer{text-align:center;margin-top:20px;font-size:0.6rem;color:#222;line-height:2;}
 
-    /* State detection banner */
-    .state-banner{display:none;text-align:center;padding:32px 24px;margin-bottom:20px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;}
-    .state-flag{font-size:3rem;margin-bottom:12px;}
-    .state-banner h2{font-size:0.9rem;color:#00ff88;letter-spacing:2px;margin-bottom:12px;}
-    .state-banner p{font-size:0.75rem;color:#666;line-height:1.9;margin-bottom:20px;}
-    .waitlist-row{display:flex;gap:8px;}
-    .waitlist-row input{flex:1;background:#0a0a0a;border:1px solid #222;border-radius:4px;padding:10px 12px;color:#e0e0e0;font-family:'DM Mono',monospace;font-size:0.78rem;outline:none;}
-    .waitlist-row input:focus{border-color:#00ff88;}
-    .waitlist-btn{background:#00ff88;color:#000;border:none;border-radius:4px;padding:10px 16px;font-family:'DM Mono',monospace;font-size:0.75rem;font-weight:500;cursor:pointer;white-space:nowrap;}
-    .waitlist-btn:hover{background:#00cc6a;}
-    .waitlist-success{color:#00ff88;font-size:0.72rem;margin-top:10px;display:none;}
-    .co-badge{display:none;text-align:center;font-size:0.65rem;color:#00ff88;letter-spacing:1px;margin-bottom:14px;padding:6px;background:#051a0d;border:1px solid #00ff8822;border-radius:4px;}
   </style>
 </head>
 <body>
@@ -63,15 +51,7 @@
   <div class="card">
 
     <!-- State Detection Banner (shown for non-CO users) -->
-    <div id="stateBanner" class="state-banner">
-      <div class="state-flag" id="stateFlag">📍</div>
-      <h2 id="stateTitle">COMING SOON</h2>
-      <p id="stateMsg">We detected you are logging in from <strong id="stateNameDisplay" style="color:#e0e0e0"></strong>.<br/><br/>Claimflow is currently available in <strong style="color:#00ff88">Colorado</strong> only, but we are expanding to all 50 states. Join the waitlist to be first in your state.</p>
-      <div class="waitlist-row">
-        <input type="email" id="waitlistEmail" placeholder="doctor@practice.com"/>
-        <button class="waitlist-btn" onclick="joinWaitlist()">NOTIFY ME</button>
-      </div>
-      <div class="waitlist-success" id="waitlistSuccess">✓ You're on the waitlist! We'll notify you when we launch in your state.</div>
+          <div class="waitlist-success" id="waitlistSuccess">✓ You're on the waitlist! We'll notify you when we launch in your state.</div>
     </div>
 
     <!-- Colorado confirmed badge -->
@@ -296,43 +276,7 @@
   }
 
   // ---- State Detection ----
-  const STATE_FLAGS = {
-    'AL':'🏛️','AK':'🏔️','AZ':'🌵','AR':'💎','CA':'🌴','CO':'🏔️','CT':'⚓',
-    'DE':'🦅','FL':'🌞','GA':'🍑','HI':'🌺','ID':'🥔','IL':'🏙️','IN':'🏎️',
-    'IA':'🌽','KS':'🌾','KY':'🐎','LA':'🎷','ME':'🦞','MD':'🦀','MA':'🦃',
-    'MI':'🚗','MN':'⛺','MS':'🎵','MO':'⚖️','MT':'🐻','NE':'🌽','NV':'🎰',
-    'NH':'🍂','NJ':'🗽','NM':'🌶️','NY':'🗽','NC':'🌲','ND':'🌾','OH':'✈️',
-    'OK':'🛢️','OR':'🌲','PA':'🔔','RI':'⚓','SC':'🌴','SD':'🦅','TN':'🎸',
-    'TX':'🤠','UT':'🏜️','VT':'🍁','VA':'🏛️','WA':'☕','WV':'⛏️','WI':'🧀','WY':'🤠'
-  };
 
-  async function detectState(){
-    try{
-      const res=await fetch('https://ipapi.co/json/');
-      const data=await res.json();
-      const state=data.region_code;
-      const stateName=data.region;
-      if(state==='CO'){
-        document.getElementById('coBadge').style.display='block';
-        return;
-      }
-      // Not Colorado — show coming soon
-      const flag=STATE_FLAGS[state]||'📍';
-      document.getElementById('stateFlag').textContent=flag;
-      document.getElementById('stateTitle').textContent='COMING SOON TO '+stateName.toUpperCase();
-      document.getElementById('stateNameDisplay').textContent=stateName;
-      document.getElementById('stateBanner').style.display='block';
-      // Gray out the form
-      document.querySelectorAll('.tab').forEach(t=>t.style.opacity='0.3');
-      document.getElementById('registerPanel').style.opacity='0.3';
-      document.getElementById('registerPanel').style.pointerEvents='none';
-      document.getElementById('loginPanel').style.opacity='0.3';
-      document.getElementById('loginPanel').style.pointerEvents='none';
-    } catch(e){
-      // Geolocation failed — allow full access silently
-      console.log('State detection unavailable, allowing access.');
-    }
-  }
 
   async function joinWaitlist() {
     const email = document.getElementById('waitlistEmail').value.trim();
@@ -363,8 +307,6 @@
   // Redirect if already logged in
   if(localStorage.getItem('cf_token')) window.location.href='/dashboard';
 
-  // Run state detection on load
-  detectState();
 </script>
 </body>
 </html>
