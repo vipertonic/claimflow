@@ -6,145 +6,111 @@
   <title>Claimflow — Login</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #0a0a0a; color: #e0e0e0;
-      font-family: 'DM Mono', monospace;
-      min-height: 100vh; display: flex;
-      align-items: center; justify-content: center; padding: 24px;
-    }
-    .container { width: 100%; max-width: 480px; }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#0a0a0a;color:#e0e0e0;font-family:'DM Mono',monospace;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+    .container{width:100%;max-width:520px;}
+    .logo{text-align:center;margin-bottom:32px;}
+    .logo h1{font-size:2rem;font-weight:500;color:#00ff88;letter-spacing:3px;}
+    .logo p{color:#444;font-size:0.68rem;margin-top:6px;letter-spacing:1px;}
+    .card{background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:32px;}
+    .tabs{display:flex;margin-bottom:26px;border-bottom:1px solid #1e1e1e;}
+    .tab{flex:1;padding:10px;text-align:center;cursor:pointer;font-size:0.72rem;color:#444;letter-spacing:1px;border-bottom:2px solid transparent;transition:all 0.2s;}
+    .tab.active{color:#00ff88;border-bottom-color:#00ff88;}
+    .panel{display:none;}.panel.active{display:block;}
+    .form-group{margin-bottom:14px;}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;}
+    label{display:block;font-size:0.63rem;color:#555;margin-bottom:5px;letter-spacing:1px;text-transform:uppercase;}
+    .req{color:#ff4444;margin-left:2px;}
+    input{width:100%;background:#0a0a0a;border:1px solid #222;border-radius:4px;padding:10px 12px;color:#e0e0e0;font-family:'DM Mono',monospace;font-size:0.82rem;outline:none;transition:border-color 0.2s;}
+    input:focus{border-color:#00ff88;}
+    input::placeholder{color:#2e2e2e;}
+    input[readonly]{background:#0a1a0a;border-color:#00ff8844;color:#00ff88;cursor:not-allowed;}
+    .hint{font-size:0.62rem;color:#444;margin-top:4px;}
+    .npi-status,.license-status{margin-top:6px;font-size:0.68rem;padding:7px 10px;border-radius:4px;display:none;}
+    .checking{background:#111;border:1px solid #333;color:#888;}
+    .valid{background:#051a0d;border:1px solid #00ff8855;color:#00ff88;}
+    .invalid{background:#1a0505;border:1px solid #ff444455;color:#ff4444;}
+    .section-label{font-size:0.6rem;color:#00ff8888;letter-spacing:2px;margin:18px 0 12px;padding-bottom:6px;border-bottom:1px solid #1a1a1a;}
+    .btn{width:100%;padding:12px;background:#00ff88;color:#000;border:none;border-radius:4px;font-family:'DM Mono',monospace;font-size:0.82rem;font-weight:500;letter-spacing:1px;cursor:pointer;margin-top:8px;transition:background 0.2s;}
+    .btn:hover{background:#00cc6a;}
+    .btn:disabled{background:#1e1e1e;color:#555;cursor:not-allowed;}
+    .alert{border-radius:4px;padding:10px 14px;font-size:0.72rem;margin-bottom:14px;display:none;line-height:1.5;}
+    .alert.error{background:#1a0505;border:1px solid #ff4444;color:#ff4444;}
+    .alert.success{background:#051a0d;border:1px solid #00ff88;color:#00ff88;}
+    .footer{text-align:center;margin-top:20px;font-size:0.6rem;color:#222;line-height:2;}
 
-    .logo { text-align: center; margin-bottom: 32px; }
-    .logo h1 { font-size: 2rem; font-weight: 500; color: #00ff88; letter-spacing: 3px; }
-    .logo p { color: #444; font-size: 0.68rem; margin-top: 6px; letter-spacing: 1px; }
-
-    .card { background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 32px; }
-
-    .tabs { display: flex; margin-bottom: 26px; border-bottom: 1px solid #1e1e1e; }
-    .tab {
-      flex: 1; padding: 10px; text-align: center; cursor: pointer;
-      font-size: 0.72rem; color: #444; letter-spacing: 1px;
-      border-bottom: 2px solid transparent; transition: all 0.2s;
-    }
-    .tab.active { color: #00ff88; border-bottom-color: #00ff88; }
-
-    .panel { display: none; }
-    .panel.active { display: block; }
-
-    .form-group { margin-bottom: 14px; }
-    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-
-    label {
-      display: block; font-size: 0.63rem; color: #555;
-      margin-bottom: 5px; letter-spacing: 1px; text-transform: uppercase;
-    }
-    .req { color: #ff4444; margin-left: 2px; }
-
-    input {
-      width: 100%; background: #0a0a0a; border: 1px solid #222;
-      border-radius: 4px; padding: 10px 12px; color: #e0e0e0;
-      font-family: 'DM Mono', monospace; font-size: 0.82rem;
-      outline: none; transition: border-color 0.2s;
-    }
-    input:focus { border-color: #00ff88; }
-    input::placeholder { color: #2e2e2e; }
-
-    .hint { font-size: 0.62rem; color: #444; margin-top: 4px; }
-
-    /* NPI verification states */
-    .npi-wrap { position: relative; }
-    .npi-status {
-      margin-top: 6px; font-size: 0.68rem; padding: 7px 10px;
-      border-radius: 4px; display: none;
-    }
-    .npi-status.checking { background: #111; border: 1px solid #333; color: #888; }
-    .npi-status.valid   { background: #051a0d; border: 1px solid #00ff8855; color: #00ff88; }
-    .npi-status.invalid { background: #1a0505; border: 1px solid #ff444455; color: #ff4444; }
-
-    /* License verification */
-    .license-status {
-      margin-top: 6px; font-size: 0.68rem; padding: 7px 10px;
-      border-radius: 4px; display: none;
-    }
-    .license-status.valid   { background: #051a0d; border: 1px solid #00ff8855; color: #00ff88; }
-    .license-status.invalid { background: #1a0505; border: 1px solid #ff444455; color: #ff4444; }
-
-    .section-label {
-      font-size: 0.6rem; color: #00ff8888; letter-spacing: 2px;
-      margin: 18px 0 12px; padding-bottom: 6px; border-bottom: 1px solid #1a1a1a;
-    }
-
-    .btn {
-      width: 100%; padding: 12px; background: #00ff88; color: #000;
-      border: none; border-radius: 4px;
-      font-family: 'DM Mono', monospace; font-size: 0.82rem; font-weight: 500;
-      letter-spacing: 1px; cursor: pointer; margin-top: 8px; transition: background 0.2s;
-    }
-    .btn:hover { background: #00cc6a; }
-    .btn:disabled { background: #1e1e1e; color: #555; cursor: not-allowed; }
-
-    .alert {
-      border-radius: 4px; padding: 10px 14px; font-size: 0.72rem;
-      margin-bottom: 14px; display: none; line-height: 1.5;
-    }
-    .alert.error   { background: #1a0505; border: 1px solid #ff4444; color: #ff4444; }
-    .alert.success { background: #051a0d; border: 1px solid #00ff88; color: #00ff88; }
-
-    .footer {
-      text-align: center; margin-top: 20px;
-      font-size: 0.6rem; color: #222; line-height: 2;
-    }
-    .footer b { color: #00ff8833; }
+    /* State detection banner */
+    .state-banner{display:none;text-align:center;padding:32px 24px;margin-bottom:20px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:8px;}
+    .state-flag{font-size:3rem;margin-bottom:12px;}
+    .state-banner h2{font-size:0.9rem;color:#00ff88;letter-spacing:2px;margin-bottom:12px;}
+    .state-banner p{font-size:0.75rem;color:#666;line-height:1.9;margin-bottom:20px;}
+    .waitlist-row{display:flex;gap:8px;}
+    .waitlist-row input{flex:1;background:#0a0a0a;border:1px solid #222;border-radius:4px;padding:10px 12px;color:#e0e0e0;font-family:'DM Mono',monospace;font-size:0.78rem;outline:none;}
+    .waitlist-row input:focus{border-color:#00ff88;}
+    .waitlist-btn{background:#00ff88;color:#000;border:none;border-radius:4px;padding:10px 16px;font-family:'DM Mono',monospace;font-size:0.75rem;font-weight:500;cursor:pointer;white-space:nowrap;}
+    .waitlist-btn:hover{background:#00cc6a;}
+    .waitlist-success{color:#00ff88;font-size:0.72rem;margin-top:10px;display:none;}
+    .co-badge{display:none;text-align:center;font-size:0.65rem;color:#00ff88;letter-spacing:1px;margin-bottom:14px;padding:6px;background:#051a0d;border:1px solid #00ff8822;border-radius:4px;}
   </style>
 </head>
 <body>
 <div class="container">
   <div class="logo">
     <h1>CLAIMFLOW</h1>
-    <p>AI MEDICAL BILLING PLATFORM · COLORADO</p>
+    <p>AI MEDICAL BILLING PLATFORM</p>
   </div>
 
   <div class="card">
+
+    <!-- State Detection Banner (shown for non-CO users) -->
+    <div id="stateBanner" class="state-banner">
+      <div class="state-flag" id="stateFlag">📍</div>
+      <h2 id="stateTitle">COMING SOON</h2>
+      <p id="stateMsg">We detected you are logging in from <strong id="stateNameDisplay" style="color:#e0e0e0"></strong>.<br/><br/>Claimflow is currently available in <strong style="color:#00ff88">Colorado</strong> only, but we are expanding to all 50 states. Join the waitlist to be first in your state.</p>
+      <div class="waitlist-row">
+        <input type="email" id="waitlistEmail" placeholder="doctor@practice.com"/>
+        <button class="waitlist-btn" onclick="joinWaitlist()">NOTIFY ME</button>
+      </div>
+      <div class="waitlist-success" id="waitlistSuccess">✓ You're on the waitlist! We'll notify you when we launch in your state.</div>
+    </div>
+
+    <!-- Colorado confirmed badge -->
+    <div class="co-badge" id="coBadge">✓ COLORADO PROVIDER DETECTED — FULL ACCESS AVAILABLE</div>
+
+    <div id="alertBox" class="alert"></div>
+
     <div class="tabs">
       <div class="tab active" onclick="switchTab('login')">LOGIN</div>
       <div class="tab" onclick="switchTab('register')">CREATE ACCOUNT</div>
     </div>
 
-    <div id="alertBox" class="alert"></div>
-    
-
-    <!-- ======== LOGIN ======== -->
+    <!-- LOGIN PANEL -->
     <div id="loginPanel" class="panel active">
       <div class="form-group">
         <label>Email or Phone Number<span class="req">*</span></label>
         <input type="text" id="loginId" placeholder="doctor@practice.com or 720-555-0000"/>
-        <div class="hint">Both email and phone number can be used to log in</div>
+        <div class="hint">Both email and phone can be used to log in</div>
       </div>
       <div class="form-group">
         <label>Password<span class="req">*</span></label>
-        <input type="password" id="loginPw" placeholder="••••••••"
-               onkeydown="if(event.key==='Enter') doLogin()"/>
+        <input type="password" id="loginPw" placeholder="••••••••"/>
       </div>
       <button class="btn" id="loginBtn" onclick="doLogin()">LOGIN →</button>
     </div>
 
-    <!-- ======== REGISTER ======== -->
+    <!-- REGISTER PANEL -->
     <div id="registerPanel" class="panel">
 
       <div class="section-label">STEP 1 — VERIFY YOUR NPI</div>
       <div class="form-group">
         <label>NPI Number<span class="req">*</span> — 10 digits</label>
-        <div class="npi-wrap">
-          <input type="text" id="rNPI" placeholder="1234567890" maxlength="10"
-                 oninput="onNPIInput(this.value)"/>
-          <div id="npiStatus" class="npi-status"></div>
-        </div>
+        <input type="text" id="rNPI" placeholder="1234567890" maxlength="10" oninput="onNPIInput(this.value)"/>
+        <div id="npiStatus" class="npi-status"></div>
         <div id="npiNameWrap" style="display:none;margin-top:8px">
           <label style="font-size:0.63rem;color:#555;letter-spacing:1px;text-transform:uppercase">Verified Provider Name — From NPPES Registry</label>
-          <input type="text" id="npiVerifiedName" readonly style="background:#0a1a0a;border-color:#00ff8844;color:#00ff88;cursor:not-allowed"/>
+          <input type="text" id="npiVerifiedName" readonly/>
         </div>
-        <div class="hint">Your name will auto-fill from the national NPPES registry</div>
+        <div class="hint">Your name auto-fills from the national NPPES registry</div>
       </div>
 
       <div class="section-label">STEP 2 — PRACTICE INFORMATION</div>
@@ -153,7 +119,7 @@
         <input type="text" id="rPractice" placeholder="Denver Family Medicine"/>
       </div>
 
-      <div class="section-label">CONTACT INFORMATION - BOTH REQUIRED</div>
+      <div class="section-label">STEP 3 — CONTACT INFORMATION — BOTH REQUIRED</div>
       <div class="form-row">
         <div>
           <label>Email Address<span class="req">*</span></label>
@@ -165,78 +131,50 @@
         </div>
       </div>
 
-      <div class="section-label">PROVIDER CREDENTIALS</div>
-
-      <!-- NPI Field with live verification -->
+      <div class="section-label">STEP 4 — COLORADO MEDICAL LICENSE</div>
       <div class="form-group">
-        <label>NPI Number — REQUIRED<span class="req">*</span></label>
-        <div class="npi-wrap">
-          <input type="text" id="rNPI" placeholder="1234567890" maxlength="10"
-                 oninput="onNPIInput(this.value)"/>
-          <div id="npiStatus" class="npi-status"></div>
-        </div>
-        <div class="hint">Verified in real time against the national NPPES registry</div>
-      </div>
-
-      <!-- Colorado License Field -->
-      <div class="form-group">
-        <label>Colorado Medical License #<span class="req">*</span></label>
-        <input type="text" id="rLicense" placeholder="DR-12345"
-               oninput="onLicenseInput(this.value)" style="text-transform:uppercase"/>
+        <label>Colorado Medical License Number<span class="req">*</span></label>
+        <input type="text" id="rLicense" placeholder="DR-12345" oninput="onLicenseInput(this.value)" style="text-transform:uppercase"/>
         <div id="licenseStatus" class="license-status"></div>
-        <div class="hint">Format: DR-##### (physician) · NR-##### (nurse) · PA-##### (physician assistant)</div>
+        <div class="hint">Format: DR-12345 (physician) · NR-12345 (nurse) · PA-12345 (physician assistant)</div>
       </div>
 
-      <div class="section-label">PRACTICE ADDRESS</div>
+      <div class="section-label">STEP 5 — PRACTICE ADDRESS</div>
       <div class="form-group">
         <label>Street Address</label>
         <input type="text" id="rAddress" placeholder="1234 Medical Dr, Suite 100"/>
       </div>
       <div class="form-row">
-        <div>
-          <label>City</label>
-          <input type="text" id="rCity" placeholder="Denver"/>
-        </div>
-        <div>
-          <label>ZIP Code</label>
-          <input type="text" id="rZip" placeholder="80202"/>
-        </div>
+        <div><label>City</label><input type="text" id="rCity" placeholder="Denver"/></div>
+        <div><label>ZIP Code</label><input type="text" id="rZip" placeholder="80202"/></div>
       </div>
 
-      <div class="section-label">SECURE PASSWORD</div>
+      <div class="section-label">STEP 6 — SECURE PASSWORD</div>
       <div class="form-group">
-        <label>Password<span class="req">*</span> — min 8 characters</label>
+        <label>Password<span class="req">*</span> — Minimum 8 characters</label>
         <input type="password" id="rPw" placeholder="••••••••"/>
       </div>
       <div class="form-group">
         <label>Confirm Password<span class="req">*</span></label>
         <input type="password" id="rPwConfirm" placeholder="Re-enter password"/>
       </div>
-
       <button class="btn" id="registerBtn" onclick="doRegister()">CREATE ACCOUNT →</button>
     </div>
-  </div>
 
-  <div class="footer">
-    <b>■</b> HIPAA COMPLIANT &nbsp;·&nbsp; <b>■</b> 256-BIT ENCRYPTION<br>
-    NPI VERIFIED VIA NPPES &nbsp;·&nbsp; COLORADO LICENSED PROVIDERS
   </div>
+  <div class="footer">NPI VERIFIED VIA NPPES · HIPAA COMPLIANT · COLORADO LICENSED PROVIDERS</div>
 </div>
 
 <script>
   const API = 'https://app.claimflowpay.com';
-
-  let npiVerified = false;
-  let npiVerifiedName = '';
-  let licenseValid = false;
-  let npiTimer = null;
+  let npiVerified = false, npiVerifiedName = '', licenseValid = false, npiTimer = null;
 
   // ---- Tab switching ----
   function switchTab(tab) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
     hideAlert();
-    if (tab === 'login') {
+    if(tab==='login'){
       document.querySelectorAll('.tab')[0].classList.add('active');
       document.getElementById('loginPanel').classList.add('active');
     } else {
@@ -245,175 +183,169 @@
     }
   }
 
-  function showAlert(msg, type = 'error') {
-    const el = document.getElementById('alertBox');
-    el.textContent = msg;
-    el.className = 'alert ' + type;
-    el.style.display = 'block';
-  }
-  function hideAlert() {
-    document.getElementById('alertBox').style.display = 'none';
-  }
+  function showAlert(msg,type){var el=document.getElementById('alertBox');el.textContent=msg;el.className='alert '+(type||'error');el.style.display='block';}
+  function hideAlert(){document.getElementById('alertBox').style.display='none';}
 
-  // ---- Live NPI Verification ----
-  function onNPIInput(val) {
-    npiVerified = false;
-    npiVerifiedName = '';
-    const el = document.getElementById('npiStatus');
-
+  // ---- NPI Verification ----
+  function onNPIInput(val){
+    npiVerified=false;
+    document.getElementById('npiNameWrap').style.display='none';
+    document.getElementById('npiVerifiedName').value='';
+    var el=document.getElementById('npiStatus');
     clearTimeout(npiTimer);
-
-    if (val.length < 10) {
-      el.style.display = 'none';
-      return;
-    }
-
-    if (val.length === 10 && /^\d+$/.test(val)) {
-      el.className = 'npi-status checking';
-      el.textContent = '⟳ Verifying NPI with national registry...';
-      el.style.display = 'block';
-
-      npiTimer = setTimeout(() => lookupNPI(val), 600);
+    if(val.length<10){el.style.display='none';return;}
+    if(val.length===10&&/^\d+$/.test(val)){
+      el.className='npi-status checking';el.textContent='Verifying NPI with national registry...';el.style.display='block';
+      npiTimer=setTimeout(()=>lookupNPI(val),600);
     } else {
-      el.className = 'npi-status invalid';
-      el.textContent = '✕ NPI must be exactly 10 digits.';
-      el.style.display = 'block';
+      el.className='npi-status invalid';el.textContent='NPI must be exactly 10 digits.';el.style.display='block';
     }
   }
 
-  async function lookupNPI(npi) {
-    const el = document.getElementById('npiStatus');
-    try {
-      const res = await fetch(API + '/verify-npi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ npi })
-      });
-      const data = await res.json();
-
-      if (data.valid) {
-        npiVerified = true;
-        npiVerifiedName = data.name;
-        el.className = 'npi-status valid';
-        el.textContent = '✓ Verified: ' + data.name + (data.state ? ' · ' + data.state : '') + ' · ' + data.type;
+  async function lookupNPI(npi){
+    var el=document.getElementById('npiStatus');
+    try{
+      var res=await fetch(API+'/verify-npi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({npi:npi})});
+      var data=await res.json();
+      if(data.valid){
+        npiVerified=true;
+        npiVerifiedName=data.name;
+        el.className='npi-status valid';
+        el.textContent='VERIFIED · '+(data.type||'Provider')+(data.state?' · '+data.state:'');
+        document.getElementById('npiVerifiedName').value=data.name;
+        document.getElementById('npiNameWrap').style.display='block';
       } else {
-        npiVerified = false;
-        el.className = 'npi-status invalid';
-        el.textContent = '✕ ' + data.error;
+        npiVerified=false;
+        el.className='npi-status invalid';
+        el.textContent=data.error||'NPI not found in registry.';
+        document.getElementById('npiNameWrap').style.display='none';
       }
-    } catch (e) {
-      el.className = 'npi-status invalid';
-      el.textContent = '✕ Verification failed. Please try again.';
-    }
+    } catch(e){el.className='npi-status invalid';el.textContent='Verification failed. Try again.';}
   }
 
-  // ---- License Format Validation ----
-  function onLicenseInput(val) {
-    const el = document.getElementById('licenseStatus');
-    const upper = val.toUpperCase();
-    document.getElementById('rLicense').value = upper;
-
-    if (!upper) { el.style.display = 'none'; licenseValid = false; return; }
-
-    const pattern = /^[A-Z]{2}-\d{4,8}$/;
-    if (pattern.test(upper)) {
-      licenseValid = true;
-      el.className = 'license-status valid';
-      el.textContent = '✓ Valid Colorado license format';
-      el.style.display = 'block';
+  // ---- License Validation ----
+  function onLicenseInput(val){
+    var el=document.getElementById('licenseStatus');
+    var upper=val.toUpperCase();
+    document.getElementById('rLicense').value=upper;
+    if(!upper){el.style.display='none';licenseValid=false;return;}
+    if(/^[A-Z]{2}-\d{4,8}$/.test(upper)){
+      licenseValid=true;el.className='license-status valid';el.textContent='Valid Colorado license format';el.style.display='block';
     } else {
-      licenseValid = false;
-      el.className = 'license-status invalid';
-      el.textContent = '✕ Format must be: DR-12345 or NR-12345 or PA-12345';
-      el.style.display = 'block';
+      licenseValid=false;el.className='license-status invalid';el.textContent='Format must be XX-##### (e.g. DR-12345)';el.style.display='block';
     }
   }
 
   // ---- Login ----
-  async function doLogin() {
-    const identifier = document.getElementById('loginId').value.trim();
-    const password = document.getElementById('loginPw').value;
-    const btn = document.getElementById('loginBtn');
-
-    if (!identifier || !password) { showAlert('Please enter your email/phone and password.'); return; }
-
-    btn.disabled = true; btn.textContent = 'LOGGING IN...';
-    hideAlert();
-
-    try {
-      const res = await fetch(API + '/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier, password })
-      });
-      const data = await res.json();
-      if (!res.ok) { showAlert(data.detail || 'Login failed.'); return; }
-
-      localStorage.setItem('cf_token', data.token);
-      localStorage.setItem('cf_practice', data.practice_name);
-      localStorage.setItem('cf_identifier', data.identifier);
-      showAlert('Login successful! Redirecting...', 'success');
-      setTimeout(() => window.location.href = '/dashboard', 700);
-    } catch (e) {
-      showAlert('Connection error. Please try again.');
-    } finally {
-      btn.disabled = false; btn.textContent = 'LOGIN →';
-    }
+  async function doLogin(){
+    var id=document.getElementById('loginId').value.trim();
+    var pw=document.getElementById('loginPw').value;
+    var btn=document.getElementById('loginBtn');
+    if(!id||!pw){showAlert('Please enter your email/phone and password.');return;}
+    btn.disabled=true;btn.textContent='LOGGING IN...';hideAlert();
+    try{
+      var res=await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:id,password:pw})});
+      var data=await res.json();
+      if(!res.ok){showAlert(data.detail||'Login failed.');return;}
+      localStorage.setItem('cf_token',data.token);
+      localStorage.setItem('cf_practice',data.practice_name);
+      showAlert('Login successful! Redirecting...','success');
+      setTimeout(()=>window.location.href='/dashboard',700);
+    } catch(e){showAlert('Connection error. Try again.');}
+    finally{btn.disabled=false;btn.textContent='LOGIN →';}
   }
 
   // ---- Register ----
-  async function doRegister() {
-    const practice_name = document.getElementById('rPractice').value.trim();
-    const email        = document.getElementById('rEmail').value.trim();
-    const phone        = document.getElementById('rPhone').value.trim();
-    const npi          = document.getElementById('rNPI').value.trim();
-    const license      = document.getElementById('rLicense').value.trim().toUpperCase();
-    const address      = document.getElementById('rAddress').value.trim();
-    const city         = document.getElementById('rCity').value.trim();
-    const zip          = document.getElementById('rZip').value.trim();
-    const password     = document.getElementById('rPw').value;
-    const confirm      = document.getElementById('rPwConfirm').value;
-    const btn          = document.getElementById('registerBtn');
+  async function doRegister(){
+    var pname=document.getElementById('rPractice').value.trim();
+    var email=document.getElementById('rEmail').value.trim();
+    var phone=document.getElementById('rPhone').value.trim();
+    var npi=document.getElementById('rNPI').value.trim();
+    var license=document.getElementById('rLicense').value.trim().toUpperCase();
+    var addr=document.getElementById('rAddress').value.trim();
+    var city=document.getElementById('rCity').value.trim();
+    var zip=document.getElementById('rZip').value.trim();
+    var pw=document.getElementById('rPw').value;
+    var pw2=document.getElementById('rPwConfirm').value;
+    var btn=document.getElementById('registerBtn');
+    if(!npi){showAlert('NPI number is required.');return;}
+    if(!npiVerified){showAlert('NPI must be verified before registering.');return;}
+    if(!pname){showAlert('Practice name is required.');return;}
+    if(!email){showAlert('Email address is required.');return;}
+    if(!phone){showAlert('Phone number is required.');return;}
+    if(!license){showAlert('Colorado medical license number is required.');return;}
+    if(!licenseValid){showAlert('Please enter a valid Colorado license (e.g. DR-12345).');return;}
+    if(!pw){showAlert('Password is required.');return;}
+    if(pw.length<8){showAlert('Password must be at least 8 characters.');return;}
+    if(pw!==pw2){showAlert('Passwords do not match.');return;}
+    btn.disabled=true;btn.textContent='CREATING ACCOUNT...';hideAlert();
+    try{
+      var res=await fetch(API+'/register',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({practice_name:pname,email:email,phone:phone,npi:npi,license_number:license,address:addr,city:city,zip:zip,password:pw})});
+      var data=await res.json();
+      if(!res.ok){showAlert(data.detail||'Registration failed.');return;}
+      localStorage.setItem('cf_token',data.token);
+      localStorage.setItem('cf_practice',data.practice_name);
+      showAlert('Account created! Redirecting...','success');
+      setTimeout(()=>window.location.href='/dashboard',1000);
+    } catch(e){showAlert('Connection error. Try again.');}
+    finally{btn.disabled=false;btn.textContent='CREATE ACCOUNT →';}
+  }
 
-    if (!practice_name)    { showAlert('Practice name is required.'); return; }
-    if (!email && !phone)  { showAlert('At least one of email or phone number is required.'); return; }
-    if (!npiVerified)      { showAlert('Please wait for NPI verification to complete. NPI must be valid to register.'); return; }
-    if (!licenseValid)     { showAlert('Please enter a valid Colorado medical license number (e.g. DR-12345).'); return; }
-    if (!password)         { showAlert('Password is required.'); return; }
-    if (password.length < 8) { showAlert('Password must be at least 8 characters.'); return; }
-    if (password !== confirm) { showAlert('Passwords do not match.'); return; }
+  // ---- State Detection ----
+  const STATE_FLAGS = {
+    'AL':'🏛️','AK':'🏔️','AZ':'🌵','AR':'💎','CA':'🌴','CO':'🏔️','CT':'⚓',
+    'DE':'🦅','FL':'🌞','GA':'🍑','HI':'🌺','ID':'🥔','IL':'🏙️','IN':'🏎️',
+    'IA':'🌽','KS':'🌾','KY':'🐎','LA':'🎷','ME':'🦞','MD':'🦀','MA':'🦃',
+    'MI':'🚗','MN':'⛺','MS':'🎵','MO':'⚖️','MT':'🐻','NE':'🌽','NV':'🎰',
+    'NH':'🍂','NJ':'🗽','NM':'🌶️','NY':'🗽','NC':'🌲','ND':'🌾','OH':'✈️',
+    'OK':'🛢️','OR':'🌲','PA':'🔔','RI':'⚓','SC':'🌴','SD':'🦅','TN':'🎸',
+    'TX':'🤠','UT':'🏜️','VT':'🍁','VA':'🏛️','WA':'☕','WV':'⛏️','WI':'🧀','WY':'🤠'
+  };
 
-    btn.disabled = true; btn.textContent = 'VERIFYING & CREATING...';
-    hideAlert();
-
-    try {
-      const res = await fetch(API + '/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          practice_name, email: email || null, phone: phone || null,
-          npi, license_number: license, address, city, zip, password
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) { showAlert(data.detail || 'Registration failed.'); return; }
-
-      localStorage.setItem('cf_token', data.token);
-      localStorage.setItem('cf_practice', data.practice_name);
-      localStorage.setItem('cf_identifier', data.identifier);
-      showAlert('Account created! Verified provider: ' + data.verified_provider + '. Redirecting...', 'success');
-      setTimeout(() => window.location.href = '/dashboard', 1200);
-    } catch (e) {
-      showAlert('Connection error. Please try again.');
-    } finally {
-      btn.disabled = false; btn.textContent = 'CREATE ACCOUNT →';
+  async function detectState(){
+    try{
+      const res=await fetch('https://ipapi.co/json/');
+      const data=await res.json();
+      const state=data.region_code;
+      const stateName=data.region;
+      if(state==='CO'){
+        document.getElementById('coBadge').style.display='block';
+        return;
+      }
+      // Not Colorado — show coming soon
+      const flag=STATE_FLAGS[state]||'📍';
+      document.getElementById('stateFlag').textContent=flag;
+      document.getElementById('stateTitle').textContent='COMING SOON TO '+stateName.toUpperCase();
+      document.getElementById('stateNameDisplay').textContent=stateName;
+      document.getElementById('stateBanner').style.display='block';
+      // Gray out the form
+      document.querySelectorAll('.tab').forEach(t=>t.style.opacity='0.3');
+      document.getElementById('registerPanel').style.opacity='0.3';
+      document.getElementById('registerPanel').style.pointerEvents='none';
+      document.getElementById('loginPanel').style.opacity='0.3';
+      document.getElementById('loginPanel').style.pointerEvents='none';
+    } catch(e){
+      // Geolocation failed — allow full access silently
+      console.log('State detection unavailable, allowing access.');
     }
   }
 
-  // Auto-redirect if already logged in
-  if (localStorage.getItem('cf_token')) {
-    window.location.href = '/dashboard';
+  function joinWaitlist(){
+    var email=document.getElementById('waitlistEmail').value.trim();
+    if(!email||!email.includes('@')){alert('Please enter a valid email address.');return;}
+    document.getElementById('waitlistSuccess').style.display='block';
+    document.getElementById('waitlistEmail').disabled=true;
+    document.querySelector('.waitlist-btn').disabled=true;
+    console.log('Waitlist signup:',email);
+    // TODO: POST to /waitlist endpoint when built
   }
+
+  // Redirect if already logged in
+  if(localStorage.getItem('cf_token')) window.location.href='/dashboard';
+
+  // Run state detection on load
+  detectState();
 </script>
 </body>
 </html>
