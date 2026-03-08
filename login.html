@@ -132,7 +132,22 @@
     <!-- ======== REGISTER ======== -->
     <div id="registerPanel" class="panel">
 
-      <div class="section-label">PRACTICE INFORMATION</div>
+      <div class="section-label">STEP 1 — VERIFY YOUR NPI</div>
+      <div class="form-group">
+        <label>NPI Number<span class="req">*</span> — 10 digits</label>
+        <div class="npi-wrap">
+          <input type="text" id="rNPI" placeholder="1234567890" maxlength="10"
+                 oninput="onNPIInput(this.value)"/>
+          <div id="npiStatus" class="npi-status"></div>
+        </div>
+        <div id="npiNameWrap" style="display:none;margin-top:8px">
+          <label style="font-size:0.63rem;color:#555;letter-spacing:1px;text-transform:uppercase">Verified Provider Name — From NPPES Registry</label>
+          <input type="text" id="npiVerifiedName" readonly style="background:#0a1a0a;border-color:#00ff8844;color:#00ff88;cursor:not-allowed"/>
+        </div>
+        <div class="hint">Your name will auto-fill from the national NPPES registry</div>
+      </div>
+
+      <div class="section-label">STEP 2 — PRACTICE INFORMATION</div>
       <div class="form-group">
         <label>Practice Name<span class="req">*</span></label>
         <input type="text" id="rPractice" placeholder="Denver Family Medicine"/>
