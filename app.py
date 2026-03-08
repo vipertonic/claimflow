@@ -3,13 +3,15 @@ import os
 import json
 import re
 import sqlite3
+import httpx
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from typing import Optional
 import uvicorn
 import bcrypt
 import jwt
@@ -29,6 +31,11 @@ client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 JWT_SECRET = os.getenv("JWT_SECRET", "claimflow-super-secret-key-2026")
 security = HTTPBearer()
 
+NPPES_API = "https://npiregistry.cms.hhs.gov/api/?version=2.1&number="
+
+# Colorado license format: 2 uppercase letters, dash, digits  e.g. DR-12345
+CO_LICENSE_PATTERN = re.compile(r'^[A-Z]{2}-\d{4,8}$')
+
 
 # -----------------------------------------
 # DATABASE SETUP
@@ -36,8 +43,6 @@ security = HTTPBearer()
 def setup_database():
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-
-    # Claims table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS claims (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,26 +62,26 @@ def setup_database():
             appeal_letter TEXT
         )
     ''')
-
-    # Users/Practices table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS practices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            practice_name TEXT,
+            practice_name TEXT NOT NULL,
             email TEXT UNIQUE,
-            password_hash TEXT,
-            npi TEXT,
-            phone TEXT,
+            phone TEXT UNIQUE,
+            password_hash TEXT NOT NULL,
+            npi TEXT NOT NULL UNIQUE,
+            npi_name TEXT,
+            npi_type TEXT,
+            license_number TEXT NOT NULL,
             address TEXT,
             city TEXT,
-            state TEXT,
+            state TEXT DEFAULT "CO",
             zip TEXT,
             plan TEXT DEFAULT "professional",
             created_at TEXT,
             is_active INTEGER DEFAULT 1
         )
     ''')
-
     conn.commit()
     conn.close()
 
@@ -86,25 +91,20 @@ setup_database()
 # -----------------------------------------
 # AUTH HELPERS
 # -----------------------------------------
-def hash_password(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+def hash_password(p):
+    return bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()
 
-def verify_password(password, hashed):
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+def verify_password(p, h):
+    return bcrypt.checkpw(p.encode(), h.encode())
 
-def create_token(practice_id, email):
-    payload = {
-        "practice_id": practice_id,
-        "email": email,
-        "exp": datetime.utcnow() + timedelta(hours=8)
-    }
+def create_token(practice_id, identifier):
+    payload = {"practice_id": practice_id, "identifier": identifier,
+                "exp": datetime.utcnow() + timedelta(hours=8)}
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        token = credentials.credentials
-        payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-        return payload
+        return jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired. Please login again.")
     except jwt.InvalidTokenError:
@@ -112,104 +112,105 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
 
 
 # -----------------------------------------
-# MODULE 1 - AI Medical Code Extractor
+# NPI VERIFICATION via NPPES
+# -----------------------------------------
+def verify_npi(npi: str):
+    """
+    Returns dict with keys: valid (bool), name (str), type (str), state (str), error (str)
+    """
+    if not npi or len(npi) != 10 or not npi.isdigit():
+        return {"valid": False, "error": "NPI must be exactly 10 digits."}
+    try:
+        response = httpx.get(NPPES_API + npi, timeout=8)
+        data = response.json()
+        results = data.get("results", [])
+        if not results:
+            return {"valid": False, "error": "NPI not found in the national registry. Please check and try again."}
+
+        result = results[0]
+        basic = result.get("basic", {})
+        enumeration_type = result.get("enumeration_type", "")
+
+        # Get provider name
+        if enumeration_type == "NPI-1":  # Individual
+            first = basic.get("first_name", "")
+            last = basic.get("last_name", "")
+            credential = basic.get("credential", "")
+            name = f"{first} {last}, {credential}".strip(", ")
+            provider_type = "Individual Provider"
+        else:  # NPI-2 = Organization
+            name = basic.get("organization_name", "")
+            provider_type = "Organization"
+
+        # Get state from addresses
+        addresses = result.get("addresses", [])
+        state = ""
+        for addr in addresses:
+            if addr.get("address_purpose") == "LOCATION":
+                state = addr.get("state", "")
+                break
+
+        status = basic.get("status", "")
+        if status != "A":
+            return {"valid": False, "error": "This NPI is no longer active in the national registry."}
+
+        return {"valid": True, "name": name, "type": provider_type, "state": state, "error": None}
+
+    except httpx.TimeoutException:
+        return {"valid": False, "error": "NPI verification timed out. Please try again."}
+    except Exception as e:
+        return {"valid": False, "error": "NPI verification service unavailable. Please try again."}
+
+
+# -----------------------------------------
+# AI MODULES
 # -----------------------------------------
 def extract_medical_codes(clinical_note):
     response = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=1000,
-        system="You are a certified medical coder (CPC). Extract ICD-10 diagnosis codes and CPT procedure codes from clinical notes. Return JSON only. No extra text. Format: {\"icd10\": [\"E11.9\", \"I10\"], \"cpt\": [\"99213\", \"93000\"]} Follow official CMS coding guidelines strictly.",
-        messages=[{"role": "user", "content": "Extract codes from this note:\n\n" + clinical_note}]
+        model="claude-opus-4-6", max_tokens=1000,
+        system='You are a certified medical coder (CPC). Extract ICD-10 and CPT codes. Return JSON only: {"icd10": ["E11.9"], "cpt": ["99213"]}',
+        messages=[{"role": "user", "content": "Extract codes:\n\n" + clinical_note}]
     )
     text = response.content[0].text
     try:
         match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
-        if match:
-            return json.loads(match.group())
-        return {"icd10": [], "cpt": []}
-    except json.JSONDecodeError:
-        icd10 = re.findall(r'[A-Z]\d{2}\.?\d*', text)
-        cpt = re.findall(r'\b\d{5}\b', text)
-        return {"icd10": icd10, "cpt": cpt}
+        return json.loads(match.group()) if match else {"icd10": [], "cpt": []}
+    except:
+        return {"icd10": re.findall(r'[A-Z]\d{2}\.?\d*', text), "cpt": re.findall(r'\b\d{5}\b', text)}
 
-
-# -----------------------------------------
-# MODULE 2 - Prior Auth Decision Engine
-# -----------------------------------------
 PRIOR_AUTH_MATRIX = {
-    "UnitedHealthcare": {
-        "99213": False, "99214": False, "70553": True,
-        "27447": True, "83036": False, "93000": False,
-        "29827": True, "73721": True
-    },
-    "Aetna": {
-        "99213": False, "99214": False, "70553": True,
-        "27447": True, "83036": False, "93000": False,
-        "29827": True, "73721": True
-    },
-    "BlueCross": {
-        "99213": False, "99214": False, "70553": True,
-        "27447": True, "83036": False, "93000": False,
-        "29827": True, "73721": True
-    },
-    "Cigna": {
-        "99213": False, "99214": False, "70553": True,
-        "27447": True, "83036": False, "93000": False,
-        "29827": True, "73721": True
-    }
+    "UnitedHealthcare": {"99213": False, "99214": False, "70553": True, "27447": True, "83036": False, "93000": False, "29827": True, "73721": True},
+    "Aetna":            {"99213": False, "99214": False, "70553": True, "27447": True, "83036": False, "93000": False, "29827": True, "73721": True},
+    "BlueCross":        {"99213": False, "99214": False, "70553": True, "27447": True, "83036": False, "93000": False, "29827": True, "73721": True},
+    "Cigna":            {"99213": False, "99214": False, "70553": True, "27447": True, "83036": False, "93000": False, "29827": True, "73721": True},
 }
 
 def check_prior_auth(cpt_codes, payer):
-    results = []
-    payer_rules = PRIOR_AUTH_MATRIX.get(payer, {})
-    for code in cpt_codes:
-        requires_auth = payer_rules.get(code, False)
-        results.append({
-            "cpt_code": code,
-            "payer": payer,
-            "requires_prior_auth": requires_auth,
-            "status": "AUTH REQUIRED" if requires_auth else "NO AUTH NEEDED"
-        })
-    return results
+    rules = PRIOR_AUTH_MATRIX.get(payer, {})
+    return [{"cpt_code": c, "payer": payer, "requires_prior_auth": rules.get(c, False),
+             "status": "AUTH REQUIRED" if rules.get(c, False) else "NO AUTH NEEDED"} for c in cpt_codes]
 
-
-# -----------------------------------------
-# DENIAL REASONS
-# -----------------------------------------
 DENIAL_REASONS = {
-    "CO-4":  "Procedure code inconsistent with modifier",
+    "CO-4": "Procedure code inconsistent with modifier",
     "CO-11": "Diagnosis inconsistent with procedure",
-    "CO-22": "Coordination of benefits issue",
     "CO-29": "Claim submitted past timely filing limit",
     "CO-50": "Non-covered service",
     "CO-97": "Service already adjudicated",
-    "PR-1":  "Deductible not met",
-    "PR-2":  "Coinsurance amount",
+    "PR-1": "Deductible not met",
+    "PR-2": "Coinsurance amount",
     "PR-96": "Prior authorization not obtained",
     "OA-23": "Payment adjusted due to prior authorization"
 }
 
-def categorize_denial(denial_code):
-    reason = DENIAL_REASONS.get(denial_code, "Unknown denial reason")
-    if denial_code in ["PR-96", "OA-23"]:
-        category = "PRIOR AUTH ISSUE"
-        action = "Submit prior authorization request immediately"
-    elif denial_code in ["CO-4", "CO-11"]:
-        category = "CODING ERROR"
-        action = "Review and correct procedure or diagnosis codes"
-    elif denial_code in ["CO-29"]:
-        category = "TIMELY FILING"
-        action = "Submit proof of timely filing with appeal"
-    elif denial_code in ["PR-1", "PR-2"]:
-        category = "PATIENT RESPONSIBILITY"
-        action = "Bill patient for deductible or coinsurance"
-    elif denial_code in ["CO-50"]:
-        category = "NON-COVERED SERVICE"
-        action = "Appeal with medical necessity documentation"
-    else:
-        category = "OTHER"
-        action = "Review denial and appeal with supporting documents"
-    return {"denial_code": denial_code, "reason": reason, "category": category, "recommended_action": action}
+def categorize_denial(code):
+    reason = DENIAL_REASONS.get(code, "Unknown denial reason")
+    if code in ["PR-96", "OA-23"]:  cat, action = "PRIOR AUTH ISSUE", "Submit prior authorization request immediately"
+    elif code in ["CO-4", "CO-11"]: cat, action = "CODING ERROR", "Review and correct procedure or diagnosis codes"
+    elif code == "CO-29":           cat, action = "TIMELY FILING", "Submit proof of timely filing with appeal"
+    elif code in ["PR-1", "PR-2"]:  cat, action = "PATIENT RESPONSIBILITY", "Bill patient for deductible or coinsurance"
+    elif code == "CO-50":           cat, action = "NON-COVERED SERVICE", "Appeal with medical necessity documentation"
+    else:                           cat, action = "OTHER", "Review denial and appeal with supporting documents"
+    return {"denial_code": code, "reason": reason, "category": cat, "recommended_action": action}
 
 
 # -----------------------------------------
@@ -217,14 +218,21 @@ def categorize_denial(denial_code):
 # -----------------------------------------
 class RegisterRequest(BaseModel):
     practice_name: str
-    email: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     password: str
-    npi: str = ""
-    phone: str = ""
+    npi: str
+    license_number: str
+    address: Optional[str] = None
+    city: Optional[str] = None
+    zip: Optional[str] = None
 
 class LoginRequest(BaseModel):
-    email: str
+    identifier: str
     password: str
+
+class VerifyNPIRequest(BaseModel):
+    npi: str
 
 class ProcessClaimRequest(BaseModel):
     patient_name: str
@@ -243,21 +251,17 @@ class UpdateStatusRequest(BaseModel):
 
 
 # -----------------------------------------
-# SERVE PAGES
+# PAGES
 # -----------------------------------------
 @app.get("/")
 def serve_login():
-    login_path = os.path.join(os.path.dirname(__file__), "login.html")
-    if os.path.exists(login_path):
-        return FileResponse(login_path, media_type="text/html")
-    return {"message": "Claimflow API is running!"}
+    p = os.path.join(os.path.dirname(__file__), "login.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Claimflow API running"}
 
 @app.get("/dashboard")
 def serve_dashboard():
-    dashboard_path = os.path.join(os.path.dirname(__file__), "dashboard.html")
-    if os.path.exists(dashboard_path):
-        return FileResponse(dashboard_path, media_type="text/html")
-    return {"message": "Dashboard not found"}
+    p = os.path.join(os.path.dirname(__file__), "dashboard.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Dashboard not found"}
 
 @app.get("/health")
 def health():
@@ -265,218 +269,200 @@ def health():
 
 
 # -----------------------------------------
+# PUBLIC: NPI LOOKUP ENDPOINT
+# -----------------------------------------
+@app.post("/verify-npi")
+def verify_npi_endpoint(req: VerifyNPIRequest):
+    result = verify_npi(req.npi)
+    return result
+
+
+# -----------------------------------------
 # AUTH ENDPOINTS
 # -----------------------------------------
 @app.post("/register")
-def register(request: RegisterRequest):
+def register(req: RegisterRequest):
+    if not req.email and not req.phone:
+        raise HTTPException(status_code=400, detail="Email or phone number is required.")
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+
+    # Verify NPI via NPPES
+    npi_result = verify_npi(req.npi)
+    if not npi_result["valid"]:
+        raise HTTPException(status_code=400, detail=npi_result["error"])
+
+    # Verify Colorado license format
+    if not CO_LICENSE_PATTERN.match(req.license_number.upper()):
+        raise HTTPException(status_code=400,
+            detail="Invalid Colorado license format. Expected format: DR-12345, NR-12345, or PA-12345")
+
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
 
-    cursor.execute('SELECT id FROM practices WHERE email = ?', (request.email,))
+    if req.email:
+        cursor.execute('SELECT id FROM practices WHERE email = ?', (req.email,))
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="An account with this email already exists.")
+
+    if req.phone:
+        cursor.execute('SELECT id FROM practices WHERE phone = ?', (req.phone,))
+        if cursor.fetchone():
+            conn.close()
+            raise HTTPException(status_code=400, detail="An account with this phone number already exists.")
+
+    cursor.execute('SELECT id FROM practices WHERE npi = ?', (req.npi,))
     if cursor.fetchone():
         conn.close()
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="An account with this NPI already exists.")
 
-    password_hash = hash_password(request.password)
+    password_hash = hash_password(req.password)
     cursor.execute('''
-        INSERT INTO practices (practice_name, email, password_hash, npi, phone, created_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO practices
+        (practice_name, email, phone, password_hash, npi, npi_name, npi_type,
+         license_number, address, city, zip, created_at)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
     ''', (
-        request.practice_name,
-        request.email,
-        password_hash,
-        request.npi,
-        request.phone,
+        req.practice_name, req.email, req.phone, password_hash,
+        req.npi, npi_result.get("name", ""), npi_result.get("type", ""),
+        req.license_number.upper(),
+        req.address, req.city, req.zip,
         datetime.now().strftime("%Y-%m-%d %H:%M")
     ))
     practice_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    token = create_token(practice_id, request.email)
+    identifier = req.email or req.phone
+    token = create_token(practice_id, identifier)
     return {
         "message": "Account created successfully!",
         "token": token,
-        "practice_name": request.practice_name,
-        "email": request.email
+        "practice_name": req.practice_name,
+        "identifier": identifier,
+        "verified_provider": npi_result.get("name", "")
     }
 
 
 @app.post("/login")
-def login(request: LoginRequest):
+def login(req: LoginRequest):
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM practices WHERE email = ?', (request.email,))
+    cursor.execute('SELECT * FROM practices WHERE email = ? OR phone = ?',
+                   (req.identifier, req.identifier))
     practice = cursor.fetchone()
     conn.close()
 
-    if not practice:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not practice or not verify_password(req.password, practice[4]):
+        raise HTTPException(status_code=401, detail="Invalid credentials. Please check your email/phone and password.")
+    if not practice[15]:
+        raise HTTPException(status_code=401, detail="Account is inactive. Please contact support.")
 
-    if not verify_password(request.password, practice[3]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    if not practice[11]:
-        raise HTTPException(status_code=401, detail="Account is inactive")
-
-    token = create_token(practice[0], request.email)
-    return {
-        "message": "Login successful!",
-        "token": token,
-        "practice_name": practice[1],
-        "email": practice[2]
-    }
+    identifier = practice[2] or practice[3]
+    token = create_token(practice[0], identifier)
+    return {"message": "Login successful!", "token": token,
+            "practice_name": practice[1], "identifier": identifier}
 
 
 # -----------------------------------------
-# PROTECTED API ENDPOINTS
+# PROTECTED ENDPOINTS
 # -----------------------------------------
 @app.post("/process-claim")
-def process_claim(request: ProcessClaimRequest, user=Depends(verify_token)):
-    practice_id = user["practice_id"]
-    codes = extract_medical_codes(request.clinical_note)
-    auth_results = check_prior_auth(codes["cpt"], request.payer)
-    codes_needing_auth = [r["cpt_code"] for r in auth_results if r["requires_prior_auth"]]
-    prior_auth_required = "YES" if codes_needing_auth else "NO"
-    prior_auth_status = "PENDING" if codes_needing_auth else "NOT REQUIRED"
+def process_claim(req: ProcessClaimRequest, user=Depends(verify_token)):
+    pid = user["practice_id"]
+    codes = extract_medical_codes(req.clinical_note)
+    auth_results = check_prior_auth(codes["cpt"], req.payer)
+    needs_auth = [r["cpt_code"] for r in auth_results if r["requires_prior_auth"]]
 
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO claims (
-            practice_id, patient_name, date_of_service, icd10_codes,
-            cpt_codes, payer, prior_auth_required,
-            prior_auth_status, claim_status,
-            date_submitted, date_updated, notes
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        practice_id, request.patient_name, request.date_of_service,
-        json.dumps(codes["icd10"]), json.dumps(codes["cpt"]),
-        request.payer, prior_auth_required, prior_auth_status,
-        "SUBMITTED",
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "Codes requiring auth: " + str(codes_needing_auth) if codes_needing_auth else "No auth required"
-    ))
+        INSERT INTO claims
+        (practice_id, patient_name, date_of_service, icd10_codes, cpt_codes, payer,
+         prior_auth_required, prior_auth_status, claim_status, date_submitted, date_updated, notes)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+    ''', (pid, req.patient_name, req.date_of_service,
+          json.dumps(codes["icd10"]), json.dumps(codes["cpt"]), req.payer,
+          "YES" if needs_auth else "NO",
+          "PENDING" if needs_auth else "NOT REQUIRED",
+          "SUBMITTED",
+          datetime.now().strftime("%Y-%m-%d %H:%M"),
+          datetime.now().strftime("%Y-%m-%d %H:%M"),
+          "Auth needed: " + str(needs_auth) if needs_auth else "No auth required"))
     claim_id = cursor.lastrowid
     conn.commit()
     conn.close()
 
-    return {
-        "claim_id": claim_id,
-        "icd10_codes": codes["icd10"],
-        "cpt_codes": codes["cpt"],
-        "auth_results": auth_results,
-        "prior_auth_required": prior_auth_required,
-        "status": "SUBMITTED"
-    }
+    return {"claim_id": claim_id, "icd10_codes": codes["icd10"], "cpt_codes": codes["cpt"],
+            "auth_results": auth_results,
+            "prior_auth_required": "YES" if needs_auth else "NO", "status": "SUBMITTED"}
 
 
 @app.get("/claims")
-def get_all_claims(user=Depends(verify_token)):
-    practice_id = user["practice_id"]
+def get_claims(user=Depends(verify_token)):
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM claims WHERE practice_id = ? ORDER BY id DESC', (practice_id,))
+    cursor.execute('SELECT * FROM claims WHERE practice_id = ? ORDER BY id DESC', (user["practice_id"],))
     rows = cursor.fetchall()
     conn.close()
-
-    claims = []
-    for row in rows:
-        claims.append({
-            "id": row[0],
-            "patient_name": row[2],
-            "date_of_service": row[3],
-            "icd10_codes": json.loads(row[4]) if row[4] else [],
-            "cpt_codes": json.loads(row[5]) if row[5] else [],
-            "payer": row[6],
-            "prior_auth_required": row[7],
-            "prior_auth_status": row[8],
-            "claim_status": row[9],
-            "date_submitted": row[10],
-            "date_updated": row[11],
-            "notes": row[12],
-            "denial_reason": row[13],
-            "appeal_letter": row[14]
-        })
-    return claims
+    return [{"id": r[0], "patient_name": r[2], "date_of_service": r[3],
+             "icd10_codes": json.loads(r[4]) if r[4] else [],
+             "cpt_codes": json.loads(r[5]) if r[5] else [],
+             "payer": r[6], "prior_auth_required": r[7], "prior_auth_status": r[8],
+             "claim_status": r[9], "date_submitted": r[10], "date_updated": r[11],
+             "notes": r[12], "denial_reason": r[13], "appeal_letter": r[14]} for r in rows]
 
 
 @app.post("/process-denial")
-def process_denial(request: DenialRequest, user=Depends(verify_token)):
+def process_denial(req: DenialRequest, user=Depends(verify_token)):
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT * FROM claims WHERE id = ? AND practice_id = ?',
-                   (request.claim_id, user["practice_id"]))
+    cursor.execute('SELECT * FROM claims WHERE id = ? AND practice_id = ?', (req.claim_id, user["practice_id"]))
     row = cursor.fetchone()
     conn.close()
-
     if not row:
         raise HTTPException(status_code=404, detail="Claim not found")
 
-    patient_name = row[2]
-    payer = row[6]
-    icd10_codes = json.loads(row[4]) if row[4] else []
-    cpt_codes = json.loads(row[5]) if row[5] else []
-    denial_info = categorize_denial(request.denial_code)
-
+    denial_info = categorize_denial(req.denial_code)
     response = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=1500,
-        system="You are an expert medical billing appeals specialist with 20 years of experience. Write professional, persuasive appeal letters that successfully overturn insurance denials.",
-        messages=[{
-            "role": "user",
-            "content": "Write a formal appeal letter for:\nPatient: " + patient_name +
-                       "\nInsurance: " + payer +
-                       "\nDenial Code: " + request.denial_code +
-                       "\nDenial Reason: " + denial_info["reason"] +
-                       "\nICD-10 Codes: " + str(icd10_codes) +
-                       "\nCPT Codes: " + str(cpt_codes)
-        }]
+        model="claude-opus-4-6", max_tokens=1500,
+        system="You are an expert medical billing appeals specialist with 20 years of experience.",
+        messages=[{"role": "user", "content":
+            f"Write a formal appeal letter:\nPatient: {row[2]}\nInsurance: {row[6]}\n"
+            f"Denial Code: {req.denial_code}\nReason: {denial_info['reason']}\n"
+            f"ICD-10: {row[4]}\nCPT: {row[5]}"}]
     )
-    appeal_letter = response.content[0].text
+    appeal = response.content[0].text
 
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('''
-        UPDATE claims
-        SET claim_status = ?, denial_reason = ?, appeal_letter = ?, date_updated = ?
-        WHERE id = ?
-    ''', (
-        "DENIED - APPEAL IN PROGRESS",
-        denial_info["reason"],
-        appeal_letter,
-        datetime.now().strftime("%Y-%m-%d %H:%M"),
-        request.claim_id
-    ))
+    cursor.execute('UPDATE claims SET claim_status=?, denial_reason=?, appeal_letter=?, date_updated=? WHERE id=?',
+                   ("DENIED - APPEAL IN PROGRESS", denial_info["reason"], appeal,
+                    datetime.now().strftime("%Y-%m-%d %H:%M"), req.claim_id))
     conn.commit()
     conn.close()
-    return {"denial_info": denial_info, "appeal_letter": appeal_letter}
+    return {"denial_info": denial_info, "appeal_letter": appeal}
 
 
 @app.get("/stats")
 def get_stats(user=Depends(verify_token)):
-    practice_id = user["practice_id"]
+    pid = user["practice_id"]
     conn = sqlite3.connect('claims.db')
     cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ?', (practice_id,))
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id=?', (pid,))
     total = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND claim_status = "SUBMITTED"', (practice_id,))
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id=? AND claim_status="SUBMITTED"', (pid,))
     submitted = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND claim_status = "APPROVED"', (practice_id,))
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id=? AND claim_status="APPROVED"', (pid,))
     approved = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND claim_status LIKE "DENIED%"', (practice_id,))
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id=? AND claim_status LIKE "DENIED%"', (pid,))
     denied = cursor.fetchone()[0]
-    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id = ? AND prior_auth_required = "YES"', (practice_id,))
-    auth_required = cursor.fetchone()[0]
+    cursor.execute('SELECT COUNT(*) FROM claims WHERE practice_id=? AND prior_auth_required="YES"', (pid,))
+    auth_req = cursor.fetchone()[0]
     conn.close()
-    return {
-        "total": total,
-        "submitted": submitted,
-        "approved": approved,
-        "denied": denied,
-        "auth_required": auth_required
-    }
+    return {"total": total, "submitted": submitted, "approved": approved,
+            "denied": denied, "auth_required": auth_req}
 
 
 if __name__ == "__main__":
