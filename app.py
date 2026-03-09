@@ -304,6 +304,11 @@ def serve_reset_password():
     p = os.path.join(os.path.dirname(__file__), "reset-password.html")
     return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Reset page not found"}
 
+@app.get("/register")
+def serve_register():
+    p = os.path.join(os.path.dirname(__file__), "login.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Not found"}
+
 @app.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest):
     email = req.email.strip().lower()

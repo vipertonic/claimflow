@@ -271,6 +271,8 @@
   // Redirect if already logged in
   if(localStorage.getItem('cf_token')) window.location.href='/dashboard';
 
+if(window.location.pathname === '/register') switchTab('register');
+
 </script>
 </body>
 </html>
