@@ -50,13 +50,6 @@
 
   <div class="card">
 
-    <!-- State Detection Banner (shown for non-CO users) -->
-          <div class="waitlist-success" id="waitlistSuccess">✓ You're on the waitlist! We'll notify you when we launch in your state.</div>
-    </div>
-
-    <!-- Colorado confirmed badge -->
-    <div class="co-badge" id="coBadge">✓ COLORADO PROVIDER DETECTED — FULL ACCESS AVAILABLE</div>
-
     <div id="alertBox" class="alert"></div>
 
     <div class="tabs">
@@ -114,9 +107,9 @@
         </div>
       </div>
 
-      <div class="section-label">STEP 4 — COLORADO MEDICAL LICENSE</div>
+      <div class="section-label">STEP 4 — MEDICAL LICENSE</div>
       <div class="form-group">
-        <label>Colorado Medical License Number<span class="req">*</span></label>
+        <label>Medical License Number<span class="req">*</span></label>
         <input type="text" id="rLicense" placeholder="DR-12345" oninput="onLicenseInput(this.value)" style="text-transform:uppercase"/>
         <div id="licenseStatus" class="license-status"></div>
         <div class="hint">Format: DR-12345 (physician) · NR-12345 (nurse) · PA-12345 (physician assistant)</div>
@@ -145,7 +138,7 @@
     </div>
 
   </div>
-  <div class="footer">NPI VERIFIED VIA NPPES · HIPAA COMPLIANT · COLORADO LICENSED PROVIDERS</div>
+  <div class="footer">NPI VERIFIED VIA NPPES · HIPAA COMPLIANT · ALL 50 STATES</div>
 </div>
 
 <script>
@@ -213,7 +206,7 @@
     document.getElementById('rLicense').value=upper;
     if(!upper){el.style.display='none';licenseValid=false;return;}
     if(/^[A-Z]{2}-\d{4,8}$/.test(upper)){
-      licenseValid=true;el.className='license-status valid';el.textContent='Valid Colorado license format';el.style.display='block';
+      licenseValid=true;el.className='license-status valid';el.textContent='Valid License format';el.style.display='block';
     } else {
       licenseValid=false;el.className='license-status invalid';el.textContent='Format must be XX-##### (e.g. DR-12345)';el.style.display='block';
     }
@@ -275,28 +268,14 @@
     finally{btn.disabled=false;btn.textContent='CREATE ACCOUNT →';}
   }
 
-  // ---- State Detection ----
-
-
-  async function joinWaitlist() {
-    const email = document.getElementById('waitlistEmail').value.trim();
-    if (!email || !email.includes('@')) { alert('Please enter a valid email address.'); return; }
-    try {
-      const res = await fetch('/waitlist', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          email: email,
-          state: detectedState,
-          state_code: detectedStateCode
-        })
+  // ---- State Detection ----)
       });
       const data = await res.json();
       if (data.success) {
-        document.getElementById('waitlistEmail').value = '';
-        document.getElementById('waitlistSuccess').style.display = 'block';
-        document.getElementById('waitlistEmail').disabled = true;
-        document.querySelector('.waitlist-btn').disabled = true;
+        
+        
+        
+        
         alert("You're on the list! We'll notify you when Claimflow launches in your state.");
       }
     } catch(e) {
