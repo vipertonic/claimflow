@@ -294,6 +294,11 @@ def serve_login():
     p = os.path.join(os.path.dirname(__file__), "login.html")
     return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Claimflow API running"}
 
+@app.get("/login")
+def serve_login_page():
+    p = os.path.join(os.path.dirname(__file__), "login.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Login not found"}
+
 @app.get("/dashboard")
 def serve_dashboard():
     p = os.path.join(os.path.dirname(__file__), "dashboard.html")
