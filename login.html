@@ -268,21 +268,6 @@
     finally{btn.disabled=false;btn.textContent='CREATE ACCOUNT →';}
   }
 
-  // ---- State Detection ----)
-      });
-      const data = await res.json();
-      if (data.success) {
-        
-        
-        
-        
-        alert("You're on the list! We'll notify you when Claimflow launches in your state.");
-      }
-    } catch(e) {
-      alert("Something went wrong. Please try again.");
-    }
-  }
-
   // Redirect if already logged in
   if(localStorage.getItem('cf_token')) window.location.href='/dashboard';
 
