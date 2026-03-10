@@ -5,9 +5,10 @@ import re
 import sqlite3
 import httpx
 import secrets
+import stripe
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -18,6 +19,16 @@ import bcrypt
 import jwt
 
 load_dotenv()
+
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
+
+STRIPE_PRICES = {
+    "starter":      "price_1T9GYcBXkAMRnMo2fy8ihwKE",
+    "professional": "price_1T9GvoBXkAMRnMo2LFZkP8pS",
+    "practice":     "price_1T9Gy3BXkAMRnMo2uYqGaBnC",
+    "enterprise":   "price_1T9H6TBXkAMRnMo2t1Wvb7q5",
+}
 
 DB_PATH = '/data/claims.db' if os.path.exists('/data') else 'claims.db'
 
@@ -112,11 +123,24 @@ def setup_database():
             city TEXT,
             state TEXT DEFAULT "CO",
             zip TEXT,
-            plan TEXT DEFAULT "professional",
+            plan TEXT DEFAULT "none",
+            subscription_status TEXT DEFAULT "none",
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT,
             created_at TEXT,
             is_active INTEGER DEFAULT 1
         )
     ''')
+    # Migration: add stripe columns if they don't exist
+    for col, coltype in [
+        ("subscription_status", "TEXT DEFAULT 'none'"),
+        ("stripe_customer_id", "TEXT"),
+        ("stripe_subscription_id", "TEXT"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE practices ADD COLUMN {col} {coltype}")
+        except Exception:
+            pass
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS waitlist (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -294,11 +318,6 @@ def serve_login():
     p = os.path.join(os.path.dirname(__file__), "login.html")
     return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Claimflow API running"}
 
-@app.get("/login")
-def serve_login_page():
-    p = os.path.join(os.path.dirname(__file__), "login.html")
-    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Login not found"}
-
 @app.get("/dashboard")
 def serve_dashboard():
     p = os.path.join(os.path.dirname(__file__), "dashboard.html")
@@ -308,11 +327,6 @@ def serve_dashboard():
 def serve_reset_password():
     p = os.path.join(os.path.dirname(__file__), "reset-password.html")
     return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Reset page not found"}
-
-@app.get("/register")
-def serve_register():
-    p = os.path.join(os.path.dirname(__file__), "login.html")
-    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Not found"}
 
 @app.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest):
@@ -552,6 +566,139 @@ def get_stats(user=Depends(verify_token)):
     auth_req = cursor.fetchone()[0]
     conn.close()
     return {"total": total, "submitted": submitted, "approved": approved, "denied": denied, "auth_required": auth_req}
+
+
+@app.get("/billing")
+def serve_billing():
+    p = os.path.join(os.path.dirname(__file__), "billing.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Not found"}
+
+@app.get("/register")
+def serve_register():
+    p = os.path.join(os.path.dirname(__file__), "login.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Not found"}
+
+@app.get("/login")
+def serve_login_page():
+    p = os.path.join(os.path.dirname(__file__), "login.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Not found"}
+
+# ── STRIPE MODELS ─────────────────────────────────────────────────────────────
+class CheckoutRequest(BaseModel):
+    price_id: str
+    plan_name: str
+
+# ── STRIPE CHECKOUT SESSION ───────────────────────────────────────────────────
+@app.post("/create-checkout-session")
+def create_checkout_session(req: CheckoutRequest, user=Depends(verify_token)):
+    if not stripe.api_key:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+
+    # Get or create Stripe customer
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT stripe_customer_id, email FROM practices WHERE id=?", (user["practice_id"],))
+    row = cursor.fetchone()
+    conn.close()
+
+    stripe_customer_id = row[0] if row else None
+    email = row[1] if row else None
+
+    if not stripe_customer_id:
+        customer = stripe.Customer.create(email=email, metadata={"practice_id": str(user["practice_id"])})
+        stripe_customer_id = customer.id
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("UPDATE practices SET stripe_customer_id=? WHERE id=?", (stripe_customer_id, user["practice_id"]))
+        conn.commit()
+        conn.close()
+
+    session = stripe.checkout.Session.create(
+        customer=stripe_customer_id,
+        payment_method_types=["card"],
+        line_items=[{"price": req.price_id, "quantity": 1}],
+        mode="subscription",
+        subscription_data={"trial_period_days": 30},
+        success_url="https://app.claimflowpay.com/dashboard?subscribed=1",
+        cancel_url="https://app.claimflowpay.com/billing",
+        metadata={"practice_id": str(user["practice_id"]), "plan_name": req.plan_name}
+    )
+
+    return {"checkout_url": session.url}
+
+# ── STRIPE WEBHOOK ────────────────────────────────────────────────────────────
+@app.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        practice_id = session.get("metadata", {}).get("practice_id")
+        plan_name = session.get("metadata", {}).get("plan_name", "").lower()
+        subscription_id = session.get("subscription")
+        if practice_id:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE practices SET subscription_status='active', plan=?, stripe_subscription_id=? WHERE id=?",
+                (plan_name, subscription_id, int(practice_id))
+            )
+            conn.commit()
+            conn.close()
+
+    elif event["type"] == "customer.subscription.deleted":
+        sub = event["data"]["object"]
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE practices SET subscription_status='cancelled', plan='none' WHERE stripe_subscription_id=?",
+            (sub["id"],)
+        )
+        conn.commit()
+        conn.close()
+
+    elif event["type"] in ("invoice.payment_failed", "invoice.payment_succeeded"):
+        sub_id = event["data"]["object"].get("subscription")
+        status = "active" if event["type"] == "invoice.payment_succeeded" else "past_due"
+        if sub_id:
+            conn = sqlite3.connect(DB_PATH)
+            cursor = conn.cursor()
+            cursor.execute("UPDATE practices SET subscription_status=? WHERE stripe_subscription_id=?", (status, sub_id))
+            conn.commit()
+            conn.close()
+
+    return {"status": "ok"}
+
+# ── BILLING STATUS ─────────────────────────────────────────────────────────────
+@app.get("/billing-status")
+def billing_status(user=Depends(verify_token)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT plan, subscription_status, stripe_subscription_id, stripe_customer_id FROM practices WHERE id=?", (user["practice_id"],))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return {"plan": "none", "status": "none"}
+
+    plan, status, sub_id, customer_id = row
+    portal_url = None
+    if customer_id and stripe.api_key:
+        try:
+            session = stripe.billing_portal.Session.create(
+                customer=customer_id,
+                return_url="https://app.claimflowpay.com/dashboard"
+            )
+            portal_url = session.url
+        except Exception:
+            pass
+
+    return {"plan": plan or "none", "status": status or "none", "portal_url": portal_url}
 
 
 if __name__ == "__main__":

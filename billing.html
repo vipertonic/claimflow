@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Choose Your Plan — Claimflow</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0a0a0a;color:#e0e0e0;font-family:'DM Mono',monospace;min-height:100vh;padding:40px 24px}
+
+    @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+    .header{text-align:center;margin-bottom:48px;animation:fadeUp .5s ease both}
+    .logo{font-size:1.2rem;font-weight:500;color:#00ff88;letter-spacing:3px;margin-bottom:16px}
+    .header h1{font-size:1.1rem;color:#e0e0e0;letter-spacing:1px;margin-bottom:8px}
+    .header p{font-size:0.75rem;color:#555;letter-spacing:0.5px;line-height:1.7}
+    .trial-badge{display:inline-flex;align-items:center;gap:8px;background:#051a0d;border:1px solid #00ff8844;color:#00ff88;padding:8px 16px;border-radius:4px;font-size:0.72rem;letter-spacing:1px;margin-top:16px}
+    .trial-badge::before{content:'◆';font-size:0.6rem}
+
+    .plans-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;max-width:1100px;margin:0 auto 40px;animation:fadeUp .5s .1s ease both}
+
+    .plan-card{background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:28px 24px;transition:border-color .2s,transform .2s;position:relative;cursor:pointer}
+    .plan-card:hover{border-color:#00ff8844;transform:translateY(-2px)}
+    .plan-card.featured{border-color:#00ff88;background:#0a1a10}
+    .plan-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:#00ff88;color:#000;font-size:0.6rem;font-weight:500;letter-spacing:1.5px;padding:3px 12px;border-radius:3px;white-space:nowrap}
+
+    .plan-name{font-size:0.65rem;color:#555;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
+    .plan-price{font-size:2.4rem;color:#e0e0e0;margin-bottom:4px;line-height:1}
+    .plan-price span{font-size:0.8rem;color:#555}
+    .plan-desc{font-size:0.72rem;color:#555;line-height:1.6;margin-bottom:20px;padding-bottom:20px;border-bottom:1px solid #1a1a1a}
+
+    .plan-features{list-style:none;display:flex;flex-direction:column;gap:8px;margin-bottom:24px}
+    .plan-features li{font-size:0.72rem;color:#888;display:flex;align-items:flex-start;gap:10px;line-height:1.5}
+    .plan-features li::before{content:'✓';color:#00ff88;font-size:0.75rem;flex-shrink:0;margin-top:1px}
+    .plan-features li.off{color:#333}
+    .plan-features li.off::before{content:'—';color:#2a2a2a}
+
+    .plan-btn{width:100%;padding:11px;background:transparent;border:1px solid #2a2a2a;border-radius:4px;color:#888;font-family:'DM Mono',monospace;font-size:0.75rem;letter-spacing:1px;cursor:pointer;transition:all .2s}
+    .plan-btn:hover{border-color:#00ff88;color:#00ff88}
+    .plan-btn.featured-btn{background:#00ff88;border-color:#00ff88;color:#000}
+    .plan-btn.featured-btn:hover{background:#00cc6a}
+    .plan-btn:disabled{opacity:0.5;cursor:not-allowed}
+
+    .alert{max-width:1100px;margin:0 auto 20px;padding:12px 16px;border-radius:4px;font-size:0.75rem;display:none}
+    .alert.error{background:#1a0505;border:1px solid #ff4444;color:#ff4444;display:block}
+    .alert.success{background:#051a0d;border:1px solid #00ff88;color:#00ff88;display:block}
+
+    .footer-note{text-align:center;font-size:0.65rem;color:#333;letter-spacing:0.5px;animation:fadeUp .5s .2s ease both}
+    .footer-note span{color:#555}
+
+    .loading-overlay{position:fixed;inset:0;background:rgba(10,10,10,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;display:none}
+    .loading-overlay.visible{display:flex}
+    .loading-spinner{font-size:0.8rem;color:#00ff88;letter-spacing:2px;animation:pulse 1.2s infinite}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">CLAIMFLOW</div>
+  <h1>CHOOSE YOUR PLAN</h1>
+  <p>All plans include AI coding, prior auth, claim tracking, and denial appeals.<br/>Cancel anytime. No setup fees.</p>
+  <div class="trial-badge">30-DAY FREE TRIAL — NO CREDIT CARD CHARGED TODAY</div>
+</div>
+
+<div id="alertBox" class="alert"></div>
+
+<div class="plans-grid">
+
+  <!-- STARTER -->
+  <div class="plan-card">
+    <div class="plan-name">Starter</div>
+    <div class="plan-price">$299<span>/mo</span></div>
+    <div class="plan-desc">Perfect for solo practitioners getting started with AI billing.</div>
+    <ul class="plan-features">
+      <li>AI medical coding (ICD-10 + CPT)</li>
+      <li>Prior auth engine</li>
+      <li>Denial appeal letters</li>
+      <li>Up to 100 claims/month</li>
+      <li>All major payers</li>
+      <li class="off">EDI 837 submission</li>
+      <li class="off">Phone support</li>
+    </ul>
+    <button class="plan-btn" onclick="subscribe('price_1T9GYcBXkAMRnMo2fy8ihwKE', 'Starter')">START FREE TRIAL →</button>
+  </div>
+
+  <!-- PROFESSIONAL -->
+  <div class="plan-card featured">
+    <div class="plan-badge">MOST POPULAR</div>
+    <div class="plan-name">Professional</div>
+    <div class="plan-price">$599<span>/mo</span></div>
+    <div class="plan-desc">For growing practices that need unlimited claims and direct submission.</div>
+    <ul class="plan-features">
+      <li>Everything in Starter</li>
+      <li>Unlimited claims</li>
+      <li>EDI 837 submission</li>
+      <li>ERA 835 processing</li>
+      <li>Priority email support</li>
+      <li>Claims analytics dashboard</li>
+      <li class="off">Dedicated account manager</li>
+    </ul>
+    <button class="plan-btn featured-btn" onclick="subscribe('price_1T9GvoBXkAMRnMo2LFZkP8pS', 'Professional')">START FREE TRIAL →</button>
+  </div>
+
+  <!-- PRACTICE -->
+  <div class="plan-card">
+    <div class="plan-name">Practice</div>
+    <div class="plan-price">$999<span>/mo</span></div>
+    <div class="plan-desc">For multi-provider practices needing dedicated support and custom rules.</div>
+    <ul class="plan-features">
+      <li>Everything in Professional</li>
+      <li>Up to 5 providers</li>
+      <li>Dedicated account manager</li>
+      <li>Custom payer rules</li>
+      <li>Phone support</li>
+      <li>Onboarding assistance</li>
+      <li>SLA guarantee</li>
+    </ul>
+    <button class="plan-btn" onclick="subscribe('price_1T9Gy3BXkAMRnMo2uYqGaBnC', 'Practice')">START FREE TRIAL →</button>
+  </div>
+
+  <!-- ENTERPRISE -->
+  <div class="plan-card">
+    <div class="plan-name">Enterprise</div>
+    <div class="plan-price">$2,999<span>/mo</span></div>
+    <div class="plan-desc">For large practices and health systems needing custom integrations.</div>
+    <ul class="plan-features">
+      <li>Everything in Practice</li>
+      <li>Unlimited providers</li>
+      <li>Custom EHR integration</li>
+      <li>24/7 phone support</li>
+      <li>Custom payer rules</li>
+      <li>Onboarding & training</li>
+      <li>SLA guarantee</li>
+    </ul>
+    <button class="plan-btn" onclick="subscribe('price_1T9H6TBXkAMRnMo2t1Wvb7q5', 'Enterprise')">START FREE TRIAL →</button>
+  </div>
+
+</div>
+
+<div class="footer-note">
+  <span>30-day free trial on all plans · Cancel anytime · HIPAA compliant · Secured by Stripe</span><br/>
+  <span style="color:#2a2a2a;margin-top:6px;display:block">Already subscribed? <a href="/dashboard" style="color:#555;text-decoration:none">Go to dashboard →</a></span>
+</div>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner">REDIRECTING TO STRIPE...</div>
+</div>
+
+<script>
+  const API = 'https://app.claimflowpay.com';
+  const token = localStorage.getItem('cf_token');
+
+  if (!token) window.location.href = '/';
+
+  function showAlert(msg, type) {
+    const el = document.getElementById('alertBox');
+    el.textContent = msg;
+    el.className = 'alert ' + type;
+    el.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
+  async function subscribe(priceId, planName) {
+    if (!token) { window.location.href = '/'; return; }
+
+    // Disable all buttons
+    document.querySelectorAll('.plan-btn').forEach(b => b.disabled = true);
+    document.getElementById('loadingOverlay').classList.add('visible');
+
+    try {
+      const res = await fetch(API + '/create-checkout-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ price_id: priceId, plan_name: planName })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to create checkout session');
+      }
+
+      // Redirect to Stripe Checkout
+      window.location.href = data.checkout_url;
+
+    } catch(err) {
+      document.getElementById('loadingOverlay').classList.remove('visible');
+      document.querySelectorAll('.plan-btn').forEach(b => b.disabled = false);
+      showAlert('Error: ' + err.message, 'error');
+    }
+  }
+</script>
+</body>
+</html>

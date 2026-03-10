@@ -331,6 +331,21 @@
     .msg { font-size: 0.75rem; padding: 10px 14px; border-radius: 4px; margin-top: 12px; }
     .msg.error { background: #1a0a0a; border: 1px solid #ff4444; color: #ff4444; }
     .msg.success { background: #0a1a0a; border: 1px solid #00ff88; color: #00ff88; }
+
+    /* BILLING */
+    .billing-card { background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 28px; margin-bottom: 20px; max-width: 600px; }
+    .billing-card.active-plan { border-color: #00ff8844; }
+    .billing-plan-name { font-size: 1.4rem; color: #00ff88; margin-bottom: 4px; text-transform: uppercase; }
+    .billing-status { display: inline-block; padding: 3px 10px; border-radius: 3px; font-size: 0.65rem; letter-spacing: 1px; margin-bottom: 20px; }
+    .billing-status.active { background: #0a2a1a; border: 1px solid #00ff8833; color: #00ff88; }
+    .billing-status.trialing { background: #0a1a2a; border: 1px solid #4488ff33; color: #4488ff; }
+    .billing-status.past_due { background: #2a1a0a; border: 1px solid #ff990033; color: #ff9900; }
+    .billing-status.cancelled { background: #1a0a0a; border: 1px solid #ff444433; color: #ff4444; }
+    .billing-status.none { background: #1a1a1a; border: 1px solid #33333333; color: #555; }
+    .billing-btn { display: inline-block; padding: 10px 20px; background: transparent; border: 1px solid #2a2a2a; border-radius: 4px; color: #888; font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 1px; cursor: pointer; text-decoration: none; transition: all .2s; margin-right: 10px; margin-top: 16px; }
+    .billing-btn:hover { border-color: #00ff88; color: #00ff88; }
+    .billing-btn.primary { background: #00ff88; border-color: #00ff88; color: #000; }
+    .billing-btn.primary:hover { background: #00cc6a; }
   </style>
 </head>
 <body>
@@ -350,6 +365,7 @@
     <div class="nav-item active" onclick="showPanel('dashboard')">DASHBOARD</div>
     <div class="nav-item" onclick="showPanel('newClaim')">NEW CLAIM</div>
     <div class="nav-item" onclick="showPanel('claims')">ALL CLAIMS</div>
+    <div class="nav-item" onclick="showPanel('billing')">BILLING</div>
   </div>
 
   <!-- CONTENT -->
@@ -425,6 +441,12 @@
       <div id="claimsTableWrap"><div class="loading">Loading...</div></div>
     </div>
 
+    <!-- BILLING PANEL -->
+    <div id="billingPanel" class="panel">
+      <div class="panel-title">BILLING & SUBSCRIPTION</div>
+      <div id="billingContent"><div class="loading">Loading billing info...</div></div>
+    </div>
+
   </div>
 </div>
 
@@ -488,6 +510,51 @@
 
     if (name === 'claims') loadClaimsTable();
     if (name === 'dashboard') { loadStats(); loadRecentClaims(); }
+    if (name === 'billing') loadBilling();
+  }
+
+  async function loadBilling() {
+    const el = document.getElementById('billingContent');
+    el.innerHTML = '<div class="loading">Loading billing info...</div>';
+    try {
+      const res = await fetch(API + '/billing-status', { headers: authHeaders() });
+      if (res.status === 401) { logout(); return; }
+      const data = await res.json();
+
+      const planLabel = data.plan === 'none' ? 'No Active Plan' : data.plan.charAt(0).toUpperCase() + data.plan.slice(1);
+      const statusLabel = data.status === 'none' ? 'NOT SUBSCRIBED' : data.status.toUpperCase().replace('_', ' ');
+      const statusClass = data.status;
+
+      let actions = '';
+      if (data.portal_url) {
+        actions += `<a href="${data.portal_url}" class="billing-btn">MANAGE BILLING →</a>`;
+      }
+      if (data.status === 'none' || data.status === 'cancelled') {
+        actions += `<a href="/billing" class="billing-btn primary">CHOOSE A PLAN →</a>`;
+      }
+
+      el.innerHTML = `
+        <div class="billing-card ${data.status === 'active' || data.status === 'trialing' ? 'active-plan' : ''}">
+          <div class="billing-plan-name">${planLabel}</div>
+          <div class="billing-status ${statusClass}">${statusLabel}</div>
+          ${data.status === 'trialing' ? '<div style="font-size:0.72rem;color:#555;margin-bottom:8px">You are currently on your 30-day free trial.</div>' : ''}
+          ${data.status === 'past_due' ? '<div style="font-size:0.72rem;color:#ff9900;margin-bottom:8px">⚠ Payment past due — please update your payment method.</div>' : ''}
+          <div style="font-size:0.72rem;color:#444;line-height:1.8;margin-top:12px">
+            Billing is managed securely through Stripe.<br/>
+            Update payment method, view invoices, or cancel anytime.
+          </div>
+          <div>${actions}</div>
+        </div>
+      `;
+
+      // Show banner if just subscribed
+      if (window.location.search.includes('subscribed=1')) {
+        el.insertAdjacentHTML('afterbegin', '<div class="msg success" style="max-width:600px;margin-bottom:16px">🎉 Welcome! Your 30-day free trial has started. No charge until your trial ends.</div>');
+        history.replaceState({}, '', '/dashboard');
+      }
+    } catch(e) {
+      el.innerHTML = '<div class="msg error">Error loading billing info.</div>';
+    }
   }
 
   async function loadStats() {
