@@ -23,6 +23,10 @@ load_dotenv()
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_VERIFY_SID = os.getenv("TWILIO_VERIFY_SID", "")
+
 STRIPE_PRICES = {
     "starter":      "price_1T9GYcBXkAMRnMo2fy8ihwKE",
     "professional": "price_1T9GvoBXkAMRnMo2LFZkP8pS",
@@ -446,28 +450,145 @@ def register(req: RegisterRequest):
         conn.close()
         raise HTTPException(status_code=400, detail="An account with this NPI already exists.")
     password_hash = hash_password(req.password)
+    confirm_token = secrets.token_urlsafe(32)
     cursor.execute('''
         INSERT INTO practices
         (practice_name, email, phone, password_hash, npi, npi_name, npi_type,
-         license_number, address, city, zip, created_at)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+         license_number, address, city, zip, created_at, email_confirm_token, email_verified)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ''', (
         req.practice_name, req.email, req.phone, password_hash,
         req.npi, npi_result.get("name", ""), npi_result.get("type", ""),
         req.license_number.upper(), req.address, req.city, req.zip,
-        datetime.now().strftime("%Y-%m-%d %H:%M")
+        datetime.now().strftime("%Y-%m-%d %H:%M"), confirm_token, 0
     ))
     practice_id = cursor.lastrowid
     conn.commit()
     conn.close()
+
+    # Send confirmation email or SMS
+    if req.email and RESEND_API_KEY:
+        send_confirmation_email(req.email, req.practice_name, confirm_token)
+    elif req.phone and TWILIO_ACCOUNT_SID:
+        send_sms_verification(req.phone)
+
     identifier = req.email or req.phone
     token = create_token(practice_id, identifier)
     return {"message": "Account created successfully!", "token": token,
             "practice_name": req.practice_name, "identifier": identifier,
             "verified_provider": npi_result.get("name", "")}
 
-@app.post("/login")
-def login(req: LoginRequest):
+
+def send_confirmation_email(email: str, practice_name: str, confirm_token: str):
+    confirm_url = f"{APP_URL}/verify-email?token={confirm_token}"
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <body style="background:#0a0a0a;font-family:'DM Mono',monospace,sans-serif;padding:40px 24px;color:#e0e0e0">
+      <div style="max-width:520px;margin:0 auto">
+        <div style="font-size:1.1rem;font-weight:500;color:#00ff88;letter-spacing:3px;margin-bottom:32px">CLAIMFLOW</div>
+        <h1 style="font-size:1.2rem;color:#e0e0e0;margin-bottom:16px;font-weight:500">Confirm your email address</h1>
+        <p style="font-size:0.85rem;color:#888;line-height:1.7;margin-bottom:32px">
+          Hi {practice_name},<br/><br/>
+          Thanks for signing up for Claimflow. Click the button below to confirm your email and activate your account.
+        </p>
+        <a href="{confirm_url}" style="display:inline-block;background:#00ff88;color:#000;padding:12px 28px;border-radius:6px;font-size:0.85rem;font-weight:700;text-decoration:none;letter-spacing:1px">CONFIRM EMAIL →</a>
+        <p style="font-size:0.72rem;color:#444;margin-top:32px;line-height:1.6">
+          If you didn't create a Claimflow account, you can safely ignore this email.<br/>
+          This link expires in 24 hours.
+        </p>
+        <div style="margin-top:40px;padding-top:24px;border-top:1px solid #1a1a1a;font-size:0.65rem;color:#333;letter-spacing:1px">
+          CLAIMFLOW · AI MEDICAL BILLING · HIPAA COMPLIANT
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+    try:
+        import httpx as _httpx
+        _httpx.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
+            json={"from": "Claimflow <noreply@claimflowpay.com>", "to": [email],
+                  "subject": "Confirm your Claimflow account", "html": html},
+            timeout=10
+        )
+    except Exception:
+        pass  # Don't block registration if email fails
+
+
+@app.get("/verify-email")
+def verify_email(token: str):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM practices WHERE email_confirm_token=?", (token,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Invalid or expired confirmation link.")
+    cursor.execute("UPDATE practices SET email_verified=1, email_confirm_token=NULL WHERE id=?", (row[0],))
+    conn.commit()
+    conn.close()
+    # Redirect to billing page
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/billing?verified=1")
+
+def send_sms_verification(phone: str):
+    """Send SMS verification code via Twilio Verify"""
+    try:
+        import httpx as _httpx
+        response = _httpx.post(
+            f"https://verify.twilio.com/v2/Services/{TWILIO_VERIFY_SID}/Verifications",
+            data={"To": phone, "Channel": "sms"},
+            auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
+            timeout=10
+        )
+        return response.status_code == 201
+    except Exception:
+        return False
+
+def check_sms_verification(phone: str, code: str) -> bool:
+    """Check SMS verification code via Twilio Verify"""
+    try:
+        import httpx as _httpx
+        response = _httpx.post(
+            f"https://verify.twilio.com/v2/Services/{TWILIO_VERIFY_SID}/VerificationCheck",
+            data={"To": phone, "Code": code},
+            auth=(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN),
+            timeout=10
+        )
+        data = response.json()
+        return data.get("status") == "approved"
+    except Exception:
+        return False
+
+class PhoneVerifyRequest(BaseModel):
+    phone: str
+    code: str
+
+@app.post("/verify-phone")
+def verify_phone(req: PhoneVerifyRequest):
+    approved = check_sms_verification(req.phone, req.code)
+    if not approved:
+        raise HTTPException(status_code=400, detail="Invalid or expired code. Please try again.")
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE practices SET email_verified=1 WHERE phone=?", (req.phone,))
+    conn.commit()
+    conn.close()
+    return {"status": "verified"}
+
+@app.post("/resend-sms")
+def resend_sms(req: dict):
+    phone = req.get("phone", "")
+    if not phone:
+        raise HTTPException(status_code=400, detail="Phone number required.")
+    sent = send_sms_verification(phone)
+    if not sent:
+        raise HTTPException(status_code=500, detail="Failed to send SMS. Please try again.")
+    return {"status": "sent"}
+
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM practices WHERE email = ? OR phone = ?',
@@ -557,6 +678,8 @@ def run_migration():
         ("subscription_status", "TEXT DEFAULT 'none'"),
         ("stripe_customer_id", "TEXT"),
         ("stripe_subscription_id", "TEXT"),
+        ("email_verified", "INTEGER DEFAULT 0"),
+        ("email_confirm_token", "TEXT"),
     ]:
         try:
             cursor.execute(f"ALTER TABLE practices ADD COLUMN {col} {coltype}")

@@ -212,6 +212,19 @@
     }
   }
 
+  function isDeviceTrusted(phone){
+    try{
+      const stored = localStorage.getItem('cf_device_'+phone);
+      if(!stored) return false;
+      const token = JSON.parse(stored);
+      if(Date.now() > token.expires){
+        localStorage.removeItem('cf_device_'+phone);
+        return false;
+      }
+      return true;
+    } catch(e){ return false; }
+  }
+
   // ---- Login ----
   async function doLogin(){
     var id=document.getElementById('loginId').value.trim();
@@ -225,8 +238,19 @@
       if(!res.ok){showAlert(data.detail||'Login failed.');return;}
       localStorage.setItem('cf_token',data.token);
       localStorage.setItem('cf_practice',data.practice_name);
-      showAlert('Login successful! Redirecting...','success');
-      setTimeout(()=>window.location.href='/dashboard',700);
+      // Check if phone login needs SMS verification
+      const isPhone = id.startsWith('+') || /^\d{10,}$/.test(id.replace(/\D/g,''));
+      if(isPhone && !isDeviceTrusted(id)){
+        showAlert('Login successful! Verifying your device...','success');
+        // Send SMS code
+        await fetch(API+'/resend-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:id})});
+        showSmsModal(id);
+        // Override redirect after SMS verification to go to dashboard
+        window._smsRedirect = '/dashboard';
+      } else {
+        showAlert('Login successful! Redirecting...','success');
+        setTimeout(()=>window.location.href='/dashboard',700);
+      }
     } catch(e){showAlert('Connection error. Try again.');}
     finally{btn.disabled=false;btn.textContent='LOGIN →';}
   }
@@ -262,17 +286,71 @@
       if(!res.ok){showAlert(data.detail||'Registration failed.');return;}
       localStorage.setItem('cf_token',data.token);
       localStorage.setItem('cf_practice',data.practice_name);
-      showAlert('Account created! Redirecting...','success');
-      setTimeout(()=>window.location.href='/dashboard',1000);
+      if(phone && !email){
+        // Show SMS verification modal
+        showSmsModal(phone);
+      } else {
+        showAlert('Account created! Check your email to confirm your address.','success');
+        setTimeout(()=>window.location.href='/billing',1500);
+      }
     } catch(e){showAlert('Connection error. Try again.');}
     finally{btn.disabled=false;btn.textContent='CREATE ACCOUNT →';}
+  }
+
+  function showSmsModal(phone){
+    document.getElementById('smsPhone').textContent = phone;
+    document.getElementById('smsModal').style.display='flex';
+  }
+
+  async function verifySmsCode(){
+    const code = document.getElementById('smsCode').value.trim();
+    const phone = document.getElementById('smsPhone').textContent;
+    const btn = document.getElementById('smsVerifyBtn');
+    const err = document.getElementById('smsError');
+    const remember = document.getElementById('smsRemember').checked;
+    if(!code || code.length !== 6){ err.textContent='Enter the 6-digit code.'; return; }
+    btn.disabled=true; btn.textContent='VERIFYING...'; err.textContent='';
+    try{
+      const res = await fetch(API+'/verify-phone',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({phone, code})});
+      const data = await res.json();
+      if(!res.ok){ err.textContent = data.detail||'Invalid code.'; return; }
+      if(remember){
+        const deviceToken = {phone, expires: Date.now() + 90*24*60*60*1000};
+        localStorage.setItem('cf_device_'+phone, JSON.stringify(deviceToken));
+      }
+      document.getElementById('smsModal').style.display='none';
+      window.location.href = window._smsRedirect || '/billing';
+    } catch(e){ err.textContent='Connection error. Try again.'; }
+    finally{ btn.disabled=false; btn.textContent='VERIFY →'; }
+  }
+
+  async function resendSms(){
+    const phone = document.getElementById('smsPhone').textContent;
+    await fetch(API+'/resend-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone})});
+    document.getElementById('smsError').textContent='Code resent!';
   }
 
   // Redirect if already logged in
   if(localStorage.getItem('cf_token')) window.location.href='/dashboard';
 
-if(window.location.pathname === '/register') switchTab('register');
-
 </script>
+
+<!-- SMS VERIFICATION MODAL -->
+<div id="smsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999;align-items:center;justify-content:center;">
+  <div style="background:#111;border:1px solid #222;border-radius:8px;padding:36px;width:90%;max-width:420px;font-family:'DM Mono',monospace;">
+    <div style="font-size:0.75rem;color:#00ff88;letter-spacing:2px;margin-bottom:16px">VERIFY YOUR PHONE</div>
+    <p style="font-size:0.78rem;color:#888;line-height:1.6;margin-bottom:20px">We sent a 6-digit code to <strong id="smsPhone" style="color:#e0e0e0"></strong>. Enter it below to activate your account.</p>
+    <input id="smsCode" type="text" maxlength="6" placeholder="000000" style="width:100%;background:#0a0a0a;border:1px solid #2a2a2a;border-radius:4px;padding:12px;color:#e0e0e0;font-family:'DM Mono',monospace;font-size:1.4rem;letter-spacing:8px;text-align:center;margin-bottom:12px;outline:none;"/>
+    <div id="smsError" style="font-size:0.72rem;color:#ff4444;margin-bottom:12px;min-height:16px"></div>
+    <label style="display:flex;align-items:center;gap:10px;font-size:0.72rem;color:#555;margin-bottom:16px;cursor:pointer">
+      <input id="smsRemember" type="checkbox" style="accent-color:#00ff88;width:14px;height:14px;"/>
+      Do not ask again on this device for 90 days
+    </label>
+    <button id="smsVerifyBtn" onclick="verifySmsCode()" style="width:100%;background:#00ff88;color:#000;border:none;border-radius:4px;padding:12px;font-family:'DM Mono',monospace;font-size:0.8rem;font-weight:500;letter-spacing:1px;cursor:pointer;margin-bottom:12px">VERIFY →</button>
+    <button onclick="resendSms()" style="background:none;border:none;color:#555;font-family:'DM Mono',monospace;font-size:0.72rem;cursor:pointer;letter-spacing:1px">Resend code</button>
+  </div>
+</div>
+
 </body>
 </html>

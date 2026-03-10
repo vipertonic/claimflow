@@ -8,4 +8,4 @@ httpx
 aiofiles
 pydantic
 resend
-stripe
+stripetwilio
