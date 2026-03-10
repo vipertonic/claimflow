@@ -8,3 +8,4 @@ httpx
 aiofiles
 pydantic
 resend
+stripe
