@@ -549,6 +549,23 @@ def process_denial(req: DenialRequest, user=Depends(verify_token)):
     conn.close()
     return {"denial_info": denial_info, "appeal_letter": appeal}
 
+@app.get("/run-migration")
+def run_migration():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    for col, coltype in [
+        ("subscription_status", "TEXT DEFAULT 'none'"),
+        ("stripe_customer_id", "TEXT"),
+        ("stripe_subscription_id", "TEXT"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE practices ADD COLUMN {col} {coltype}")
+            conn.commit()
+        except Exception:
+            pass
+    conn.close()
+    return {"status": "migration complete"}
+
 @app.get("/stats")
 def get_stats(user=Depends(verify_token)):
     pid = user["practice_id"]
