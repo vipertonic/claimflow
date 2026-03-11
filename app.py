@@ -55,6 +55,13 @@ def check_rate_limit(ip: str, action: str = "login"):
         raise HTTPException(status_code=429, detail="Too many attempts. Please wait 60 seconds and try again.")
     rate_limit_store[key].append(now)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # --- JWT BLOCKLIST (logout invalidation) ---
 token_blocklist = set()
 
@@ -62,20 +69,12 @@ token_blocklist = set()
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 JWT_SECRET = os.getenv("JWT_SECRET", "claimflow-super-secret-key-2026")
@@ -221,6 +220,8 @@ def audit(action: str, practice_id=None, identifier=None, ip=None, details=None)
         conn.close()
     except Exception:
         pass
+
+def hash_password(p):
     return bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(p, h):
