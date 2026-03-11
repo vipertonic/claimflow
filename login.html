@@ -68,6 +68,10 @@
         <label>Password<span class="req">*</span></label>
         <input type="password" id="loginPw" placeholder="••••••••"/>
       </div>
+      <label style="display:flex;align-items:center;gap:10px;font-size:0.72rem;color:#555;margin-bottom:14px;cursor:pointer;text-transform:none;letter-spacing:0.5px;">
+        <input type="checkbox" id="stayLoggedIn" style="accent-color:#00ff88;width:14px;height:14px;"/>
+        Stay logged in for 12 hours
+      </label>
       <button class="btn" id="loginBtn" onclick="doLogin()">LOGIN →</button>
       <div style="text-align:center;margin-top:16px;">
         <a href="/reset-password" style="font-size:.75rem;color:#5a7299;text-decoration:none;letter-spacing:.5px;transition:color .2s;" onmouseover="this.style.color='#00e87b'" onmouseout="this.style.color='#5a7299'">Forgot your password?</a>
@@ -229,11 +233,12 @@
   async function doLogin(){
     var id=document.getElementById('loginId').value.trim();
     var pw=document.getElementById('loginPw').value;
+    var stayLoggedIn=document.getElementById('stayLoggedIn').checked;
     var btn=document.getElementById('loginBtn');
     if(!id||!pw){showAlert('Please enter your email/phone and password.');return;}
     btn.disabled=true;btn.textContent='LOGGING IN...';hideAlert();
     try{
-      var res=await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:id,password:pw})});
+      var res=await fetch(API+'/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:id,password:pw,stay_logged_in:stayLoggedIn})});
       var data=await res.json();
       if(!res.ok){showAlert(data.detail||'Login failed.');return;}
       localStorage.setItem('cf_token',data.token);

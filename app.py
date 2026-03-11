@@ -173,9 +173,9 @@ def hash_password(p):
 def verify_password(p, h):
     return bcrypt.checkpw(p.encode(), h.encode())
 
-def create_token(practice_id, identifier):
+def create_token(practice_id, identifier, hours=2):
     payload = {"practice_id": practice_id, "identifier": identifier,
-                "exp": datetime.utcnow() + timedelta(hours=8)}
+                "exp": datetime.utcnow() + timedelta(hours=hours)}
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
@@ -292,6 +292,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     identifier: str
     password: str
+    stay_logged_in: Optional[bool] = False
 
 class VerifyNPIRequest(BaseModel):
     npi: str
@@ -602,7 +603,8 @@ def login(req: LoginRequest):
     if not practice[15]:
         raise HTTPException(status_code=401, detail="Account is inactive.")
     identifier = practice[2] or practice[3]
-    token = create_token(practice[0], identifier)
+    hours = 12 if req.stay_logged_in else 2
+    token = create_token(practice[0], identifier, hours=hours)
     return {"message": "Login successful!", "token": token,
             "practice_name": practice[1], "identifier": identifier}
 
