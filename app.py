@@ -6,11 +6,13 @@ import sqlite3
 import httpx
 import secrets
 import stripe
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
@@ -37,6 +39,36 @@ STRIPE_PRICES = {
 DB_PATH = '/data/claims.db' if os.path.exists('/data') else 'claims.db'
 
 app = FastAPI()
+
+# --- RATE LIMITER ---
+rate_limit_store = defaultdict(list)
+RATE_LIMIT_WINDOW = 60   # seconds
+RATE_LIMIT_MAX    = 5    # max attempts per window
+
+def check_rate_limit(ip: str, action: str = "login"):
+    key = f"{ip}:{action}"
+    now = time.time()
+    attempts = rate_limit_store[key]
+    # purge old attempts
+    rate_limit_store[key] = [t for t in attempts if now - t < RATE_LIMIT_WINDOW]
+    if len(rate_limit_store[key]) >= RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many attempts. Please wait 60 seconds and try again.")
+    rate_limit_store[key].append(now)
+
+# --- JWT BLOCKLIST (logout invalidation) ---
+token_blocklist = set()
+
+# --- SECURITY HEADERS MIDDLEWARE ---
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 app.add_middleware(
     CORSMiddleware,
@@ -163,11 +195,32 @@ def setup_database():
             used INTEGER DEFAULT 0
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            practice_id INTEGER,
+            identifier TEXT,
+            action TEXT NOT NULL,
+            ip_address TEXT,
+            details TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
 
-def hash_password(p):
+def audit(action: str, practice_id=None, identifier=None, ip=None, details=None):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute(
+            "INSERT INTO audit_log (timestamp, practice_id, identifier, action, ip_address, details) VALUES (?,?,?,?,?,?)",
+            (datetime.utcnow().isoformat(), practice_id, identifier, action, ip, details)
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
     return bcrypt.hashpw(p.encode(), bcrypt.gensalt()).decode()
 
 def verify_password(p, h):
@@ -179,8 +232,11 @@ def create_token(practice_id, identifier, hours=2):
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    token = credentials.credentials
+    if token in token_blocklist:
+        raise HTTPException(status_code=401, detail="Session expired. Please login again.")
     try:
-        return jwt.decode(credentials.credentials, JWT_SECRET, algorithms=["HS256"])
+        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Session expired. Please login again.")
     except jwt.InvalidTokenError:
@@ -424,7 +480,9 @@ def get_waitlist(user=Depends(verify_token)):
     return [{"email": r[0], "state": r[1], "state_code": r[2], "signed_up": r[3]} for r in rows]
 
 @app.post("/register")
-def register(req: RegisterRequest):
+def register(req: RegisterRequest, request: Request):
+    ip = request.client.host
+    check_rate_limit(ip, "register")
     if not req.email and not req.phone:
         raise HTTPException(status_code=400, detail="Email or phone number is required.")
     if len(req.password) < 8:
@@ -591,7 +649,9 @@ def resend_sms(req: dict):
 
 
 @app.post("/login")
-def login(req: LoginRequest):
+def login(req: LoginRequest, request: Request):
+    ip = request.client.host
+    check_rate_limit(ip, "login")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM practices WHERE email = ? OR phone = ?',
@@ -599,14 +659,22 @@ def login(req: LoginRequest):
     practice = cursor.fetchone()
     conn.close()
     if not practice or not verify_password(req.password, practice[4]):
+        audit("LOGIN_FAILED", identifier=req.identifier, ip=ip)
         raise HTTPException(status_code=401, detail="Invalid credentials.")
     if not practice[15]:
         raise HTTPException(status_code=401, detail="Account is inactive.")
     identifier = practice[2] or practice[3]
     hours = 12 if req.stay_logged_in else 2
     token = create_token(practice[0], identifier, hours=hours)
+    audit("LOGIN_SUCCESS", practice_id=practice[0], identifier=identifier, ip=ip)
     return {"message": "Login successful!", "token": token,
             "practice_name": practice[1], "identifier": identifier}
+
+@app.post("/logout")
+def logout(credentials: HTTPAuthorizationCredentials = Depends(security), user=Depends(verify_token)):
+    token_blocklist.add(credentials.credentials)
+    audit("LOGOUT", practice_id=user.get("practice_id"), identifier=user.get("identifier"))
+    return {"message": "Logged out successfully."}
 
 @app.post("/process-claim")
 def process_claim(req: ProcessClaimRequest, user=Depends(verify_token)):
@@ -630,6 +698,7 @@ def process_claim(req: ProcessClaimRequest, user=Depends(verify_token)):
     claim_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    audit("CLAIM_CREATED", practice_id=pid, details=f"claim_id={claim_id} payer={req.payer}")
     return {"claim_id": claim_id, "icd10_codes": codes["icd10"], "cpt_codes": codes["cpt"],
             "auth_results": auth_results, "prior_auth_required": "YES" if needs_auth else "NO", "status": "SUBMITTED"}
 
@@ -690,8 +759,35 @@ def run_migration():
             conn.commit()
         except Exception:
             pass
+    # Create audit log table if not exists
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            practice_id INTEGER,
+            identifier TEXT,
+            action TEXT NOT NULL,
+            ip_address TEXT,
+            details TEXT
+        )
+    ''')
+    conn.commit()
     conn.close()
     return {"status": "migration complete"}
+
+@app.get("/audit-log")
+def get_audit_log(user=Depends(verify_token)):
+    """Returns last 200 audit events for this practice."""
+    pid = user["practice_id"]
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT timestamp, action, ip_address, details FROM audit_log WHERE practice_id=? ORDER BY id DESC LIMIT 200",
+        (pid,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return {"events": [{"timestamp": r[0], "action": r[1], "ip": r[2], "details": r[3]} for r in rows]}
 
 @app.get("/stats")
 def get_stats(user=Depends(verify_token)):
