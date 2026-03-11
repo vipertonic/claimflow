@@ -589,6 +589,8 @@ def resend_sms(req: dict):
     return {"status": "sent"}
 
 
+@app.post("/login")
+def login(req: LoginRequest):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM practices WHERE email = ? OR phone = ?',
