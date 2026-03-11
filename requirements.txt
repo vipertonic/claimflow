@@ -10,3 +10,4 @@ pydantic
 resend
 stripe
 twilio
+reportlab

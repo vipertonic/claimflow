@@ -686,7 +686,10 @@
                   <td>${c.cpt_codes.map(x => `<span class="code-tag">${x}</span>`).join('')}</td>
                   <td><span style="color:${c.prior_auth_required==='YES'?'#ff4444':'#00ff88'};font-size:0.7rem">${c.prior_auth_required}</span></td>
                   <td><span class="status-badge status-${c.claim_status?.split(' ')[0]}">${c.claim_status}</span></td>
-                  <td><button class="appeal-btn" onclick="openAppeal(${c.id})">APPEAL</button></td>
+                  <td style="display:flex;gap:6px">
+                    <button class="appeal-btn" onclick="openAppeal(${c.id})">APPEAL</button>
+                    <button class="appeal-btn" style="background:#0c1524;border-color:#1e3050;color:#8fa3c4" onclick="downloadSummary(${c.id})">PDF</button>
+                  </td>
                 </tr>
               `).join('')}
             </tbody>
@@ -696,6 +699,26 @@
     } catch(e) {
       el.innerHTML = '<div class="msg error">Error loading claims.</div>';
     }
+  }
+
+  function downloadSummary(claimId) {
+    const token = localStorage.getItem('cf_token');
+    fetch(`${API}/claim-summary/${claimId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      return res.blob();
+    })
+    .then(blob => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `claimflow_claim_${claimId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(() => alert('Error generating claim summary PDF.'));
   }
 
   function openAppeal(claimId) {

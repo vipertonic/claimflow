@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional
@@ -714,6 +714,211 @@ def get_claims(user=Depends(verify_token)):
              "payer": r[6], "prior_auth_required": r[7], "prior_auth_status": r[8],
              "claim_status": r[9], "date_submitted": r[10], "date_updated": r[11],
              "notes": r[12], "denial_reason": r[13], "appeal_letter": r[14]} for r in rows]
+
+@app.get("/claim-summary/{claim_id}")
+def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
+    import io
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM claims WHERE id=? AND practice_id=?', (claim_id, user["practice_id"]))
+    claim = cursor.fetchone()
+    cursor.execute('SELECT practice_name, email, phone, npi, npi_name, address, city, state, zip FROM practices WHERE id=?', (user["practice_id"],))
+    practice = cursor.fetchone()
+    conn.close()
+
+    if not claim:
+        raise HTTPException(status_code=404, detail="Claim not found")
+
+    icd10 = json.loads(claim[4]) if claim[4] else []
+    cpt   = json.loads(claim[5]) if claim[5] else []
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter,
+                            leftMargin=0.6*inch, rightMargin=0.6*inch,
+                            topMargin=0.6*inch, bottomMargin=0.6*inch)
+
+    # Colors
+    dark   = colors.HexColor("#04080f")
+    green  = colors.HexColor("#00e87b")
+    mid    = colors.HexColor("#1e3050")
+    light  = colors.HexColor("#8fa3c4")
+    white  = colors.white
+
+    styles = getSampleStyleSheet()
+    def style(name, **kw):
+        s = ParagraphStyle(name, **kw)
+        return s
+
+    hdr_style  = style("hdr",  fontSize=20, textColor=green,  fontName="Helvetica-Bold", spaceAfter=2)
+    sub_style  = style("sub",  fontSize=8,  textColor=light,  fontName="Helvetica",      spaceAfter=10)
+    sec_style  = style("sec",  fontSize=8,  textColor=green,  fontName="Helvetica-Bold", spaceBefore=14, spaceAfter=4)
+    lbl_style  = style("lbl",  fontSize=7,  textColor=light,  fontName="Helvetica")
+    val_style  = style("val",  fontSize=9,  textColor=white,  fontName="Helvetica-Bold")
+    note_style = style("note", fontSize=8,  textColor=colors.HexColor("#eef2ff"), fontName="Helvetica", leading=13)
+    foot_style = style("foot", fontSize=7,  textColor=light,  fontName="Helvetica", alignment=TA_CENTER)
+
+    story = []
+
+    # Header
+    story.append(Paragraph("CLAIMFLOW", hdr_style))
+    story.append(Paragraph("CLAIM SUMMARY  ·  CMS-1500 REFERENCE FORMAT", sub_style))
+    story.append(HRFlowable(width="100%", thickness=1, color=green, spaceAfter=12))
+
+    # Status badge row
+    status_color = green if claim[9] == "APPROVED" else colors.HexColor("#ff4444") if "DENIED" in str(claim[9]) else colors.HexColor("#f4c430")
+    status_data = [[
+        Paragraph(f"CLAIM #{claim[0]}", style("cid", fontSize=9, textColor=light, fontName="Helvetica")),
+        Paragraph(f"STATUS: {claim[9]}", style("cs", fontSize=9, textColor=status_color, fontName="Helvetica-Bold", alignment=TA_RIGHT))
+    ]]
+    status_tbl = Table(status_data, colWidths=["50%","50%"])
+    status_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#070d1a")),
+        ("BOX",        (0,0), (-1,-1), 1, mid),
+        ("TOPPADDING",    (0,0),(-1,-1), 8),
+        ("BOTTOMPADDING", (0,0),(-1,-1), 8),
+        ("LEFTPADDING",   (0,0),(-1,-1), 12),
+        ("RIGHTPADDING",  (0,0),(-1,-1), 12),
+        ("ROUNDEDCORNERS", [4]),
+    ]))
+    story.append(status_tbl)
+    story.append(Spacer(1, 14))
+
+    # Section helper
+    def section(title, rows):
+        story.append(Paragraph(title, sec_style))
+        data = []
+        for label, value in rows:
+            data.append([
+                Paragraph(label, lbl_style),
+                Paragraph(str(value) if value else "—", val_style)
+            ])
+        t = Table(data, colWidths=[1.6*inch, 5.4*inch])
+        t.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,-1), colors.HexColor("#070d1a")),
+            ("BACKGROUND",    (0,0), (0,-1),  colors.HexColor("#0c1524")),
+            ("BOX",           (0,0), (-1,-1), 1, mid),
+            ("INNERGRID",     (0,0), (-1,-1), 0.5, colors.HexColor("#13203a")),
+            ("TOPPADDING",    (0,0), (-1,-1), 7),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 7),
+            ("LEFTPADDING",   (0,0), (-1,-1), 10),
+            ("RIGHTPADDING",  (0,0), (-1,-1), 10),
+        ]))
+        story.append(t)
+
+    # PATIENT INFO (Box 1–13 equivalent)
+    section("PATIENT / INSURED INFORMATION", [
+        ("Patient Name",       claim[2]),
+        ("Date of Service",    claim[3]),
+        ("Insurance Payer",    claim[6]),
+        ("Prior Auth Required",claim[7]),
+        ("Prior Auth Status",  claim[8]),
+    ])
+
+    # PROVIDER INFO (Box 31–33 equivalent)
+    if practice:
+        section("BILLING PROVIDER INFORMATION", [
+            ("Practice Name",  practice[0]),
+            ("NPI",            practice[3]),
+            ("Provider Name",  practice[4] or "—"),
+            ("Email",          practice[1] or "—"),
+            ("Phone",          practice[2] or "—"),
+            ("Address",        f"{practice[5] or ''}, {practice[6] or ''}, {practice[7] or ''} {practice[8] or ''}".strip(", ")),
+        ])
+
+    # DIAGNOSIS CODES (Box 21)
+    story.append(Paragraph("DIAGNOSIS CODES  —  BOX 21 (ICD-10-CM)", sec_style))
+    if icd10:
+        diag_data = [["#", "ICD-10 Code", "Description"]]
+        for i, code in enumerate(icd10):
+            if isinstance(code, dict):
+                diag_data.append([str(i+1), code.get("code",""), code.get("description","")])
+            else:
+                diag_data.append([str(i+1), str(code), "See EHR for description"])
+        diag_tbl = Table(diag_data, colWidths=[0.4*inch, 1.3*inch, 5.3*inch])
+        diag_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0),  colors.HexColor("#0c1524")),
+            ("BACKGROUND",    (0,1), (-1,-1), colors.HexColor("#070d1a")),
+            ("TEXTCOLOR",     (0,0), (-1,0),  green),
+            ("TEXTCOLOR",     (0,1), (-1,-1), white),
+            ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
+            ("FONTNAME",      (0,1), (-1,-1), "Helvetica"),
+            ("FONTSIZE",      (0,0), (-1,-1), 8),
+            ("BOX",           (0,0), (-1,-1), 1, mid),
+            ("INNERGRID",     (0,0), (-1,-1), 0.5, colors.HexColor("#13203a")),
+            ("TOPPADDING",    (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("LEFTPADDING",   (0,0), (-1,-1), 8),
+        ]))
+        story.append(diag_tbl)
+    else:
+        story.append(Paragraph("No diagnosis codes recorded.", note_style))
+
+    story.append(Spacer(1, 10))
+
+    # PROCEDURE CODES (Box 24)
+    story.append(Paragraph("PROCEDURE CODES  —  BOX 24 (CPT/HCPCS)", sec_style))
+    if cpt:
+        proc_data = [["#", "CPT Code", "Description", "Units", "Charges"]]
+        for i, code in enumerate(cpt):
+            if isinstance(code, dict):
+                proc_data.append([str(i+1), code.get("code",""), code.get("description",""), "1", "$0.00"])
+            else:
+                proc_data.append([str(i+1), str(code), "See fee schedule", "1", "$0.00"])
+        proc_tbl = Table(proc_data, colWidths=[0.4*inch, 1.1*inch, 3.8*inch, 0.7*inch, 1.0*inch])
+        proc_tbl.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,0),  colors.HexColor("#0c1524")),
+            ("BACKGROUND",    (0,1), (-1,-1), colors.HexColor("#070d1a")),
+            ("TEXTCOLOR",     (0,0), (-1,0),  green),
+            ("TEXTCOLOR",     (0,1), (-1,-1), white),
+            ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
+            ("FONTNAME",      (0,1), (-1,-1), "Helvetica"),
+            ("FONTSIZE",      (0,0), (-1,-1), 8),
+            ("BOX",           (0,0), (-1,-1), 1, mid),
+            ("INNERGRID",     (0,0), (-1,-1), 0.5, colors.HexColor("#13203a")),
+            ("TOPPADDING",    (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("LEFTPADDING",   (0,0), (-1,-1), 8),
+            ("ALIGN",         (3,0), (-1,-1), "CENTER"),
+        ]))
+        story.append(proc_tbl)
+    else:
+        story.append(Paragraph("No procedure codes recorded.", note_style))
+
+    # Notes / denial
+    if claim[12]:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("NOTES", sec_style))
+        story.append(Paragraph(claim[12], note_style))
+
+    if claim[13]:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("DENIAL REASON", sec_style))
+        story.append(Paragraph(claim[13], note_style))
+
+    # Footer
+    story.append(Spacer(1, 20))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=mid, spaceAfter=8))
+    story.append(Paragraph(
+        f"Generated by Claimflow  ·  {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}  ·  HIPAA Compliant  ·  claimflowpay.com",
+        foot_style
+    ))
+    story.append(Paragraph(
+        "This document is for billing reference only. Charges shown as $0.00 should be completed per your practice fee schedule before submission.",
+        foot_style
+    ))
+
+    doc.build(story)
+    buf.seek(0)
+    filename = f"claimflow_claim_{claim_id}_{claim[2].replace(' ','_')}.pdf"
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 @app.post("/process-denial")
 def process_denial(req: DenialRequest, user=Depends(verify_token)):
