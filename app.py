@@ -721,10 +721,10 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
     import io
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import inch
     from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -742,88 +742,109 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=letter,
-                            leftMargin=0.6*inch, rightMargin=0.6*inch,
-                            topMargin=0.6*inch, bottomMargin=0.6*inch)
+                            leftMargin=0.75*inch, rightMargin=0.75*inch,
+                            topMargin=0.75*inch, bottomMargin=0.75*inch)
 
-    # Colors
-    dark   = colors.HexColor("#04080f")
-    green  = colors.HexColor("#00e87b")
-    mid    = colors.HexColor("#1e3050")
-    light  = colors.HexColor("#8fa3c4")
-    white  = colors.white
+    # Colors — clean white/black
+    black     = colors.HexColor("#111111")
+    dark_gray = colors.HexColor("#444444")
+    mid_gray  = colors.HexColor("#888888")
+    light_gray= colors.HexColor("#f2f2f2")
+    border    = colors.HexColor("#cccccc")
+    green     = colors.HexColor("#00a85a")
+    white     = colors.white
 
-    styles = getSampleStyleSheet()
-    def style(name, **kw):
-        s = ParagraphStyle(name, **kw)
-        return s
+    def S(name, **kw):
+        return ParagraphStyle(name, **kw)
 
-    hdr_style  = style("hdr",  fontSize=20, textColor=green,  fontName="Helvetica-Bold", spaceAfter=2)
-    sub_style  = style("sub",  fontSize=8,  textColor=light,  fontName="Helvetica",      spaceAfter=10)
-    sec_style  = style("sec",  fontSize=8,  textColor=green,  fontName="Helvetica-Bold", spaceBefore=14, spaceAfter=4)
-    lbl_style  = style("lbl",  fontSize=7,  textColor=light,  fontName="Helvetica")
-    val_style  = style("val",  fontSize=9,  textColor=white,  fontName="Helvetica-Bold")
-    note_style = style("note", fontSize=8,  textColor=colors.HexColor("#eef2ff"), fontName="Helvetica", leading=13)
-    foot_style = style("foot", fontSize=7,  textColor=light,  fontName="Helvetica", alignment=TA_CENTER)
+    hdr_style  = S("hdr",  fontSize=22, textColor=black,     fontName="Helvetica-Bold", spaceAfter=2)
+    sub_style  = S("sub",  fontSize=9,  textColor=mid_gray,  fontName="Helvetica",      spaceAfter=14)
+    sec_style  = S("sec",  fontSize=8,  textColor=white,     fontName="Helvetica-Bold", spaceBefore=14, spaceAfter=0)
+    lbl_style  = S("lbl",  fontSize=8,  textColor=dark_gray, fontName="Helvetica")
+    val_style  = S("val",  fontSize=9,  textColor=black,     fontName="Helvetica-Bold")
+    note_style = S("note", fontSize=9,  textColor=black,     fontName="Helvetica", leading=14)
+    foot_style = S("foot", fontSize=7,  textColor=mid_gray,  fontName="Helvetica", alignment=TA_CENTER)
 
     story = []
 
-    # Header
-    story.append(Paragraph("CLAIMFLOW", hdr_style))
-    story.append(Paragraph("CLAIM SUMMARY  ·  CMS-1500 REFERENCE FORMAT", sub_style))
-    story.append(HRFlowable(width="100%", thickness=1, color=green, spaceAfter=12))
+    # Header — logo left, claim info right
+    hdr_data = [[
+        Paragraph("CLAIMFLOW", hdr_style),
+        Paragraph(f"Claim #{claim[0]}<br/><font size=8 color='#888888'>{datetime.utcnow().strftime('%B %d, %Y')}</font>",
+                  S("hr", fontSize=11, textColor=black, fontName="Helvetica-Bold", alignment=TA_RIGHT))
+    ]]
+    hdr_tbl = Table(hdr_data, colWidths=["60%","40%"])
+    hdr_tbl.setStyle(TableStyle([
+        ("VALIGN",  (0,0), (-1,-1), "BOTTOM"),
+        ("TOPPADDING",    (0,0), (-1,-1), 0),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
+    ]))
+    story.append(hdr_tbl)
+    story.append(Paragraph("Claim Summary  ·  CMS-1500 Reference Format", sub_style))
+    story.append(HRFlowable(width="100%", thickness=1.5, color=black, spaceAfter=14))
 
-    # Status badge row
-    status_color = green if claim[9] == "APPROVED" else colors.HexColor("#ff4444") if "DENIED" in str(claim[9]) else colors.HexColor("#f4c430")
+    # Status row
+    status_color = colors.HexColor("#1a7a40") if claim[9] == "APPROVED" \
+        else colors.HexColor("#cc2200") if "DENIED" in str(claim[9]) \
+        else colors.HexColor("#b07800")
     status_data = [[
-        Paragraph(f"CLAIM #{claim[0]}", style("cid", fontSize=9, textColor=light, fontName="Helvetica")),
-        Paragraph(f"STATUS: {claim[9]}", style("cs", fontSize=9, textColor=status_color, fontName="Helvetica-Bold", alignment=TA_RIGHT))
+        Paragraph("Claim Status", lbl_style),
+        Paragraph(str(claim[9]), S("sv", fontSize=10, textColor=status_color, fontName="Helvetica-Bold", alignment=TA_RIGHT))
     ]]
     status_tbl = Table(status_data, colWidths=["50%","50%"])
     status_tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), colors.HexColor("#070d1a")),
-        ("BOX",        (0,0), (-1,-1), 1, mid),
-        ("TOPPADDING",    (0,0),(-1,-1), 8),
-        ("BOTTOMPADDING", (0,0),(-1,-1), 8),
-        ("LEFTPADDING",   (0,0),(-1,-1), 12),
-        ("RIGHTPADDING",  (0,0),(-1,-1), 12),
-        ("ROUNDEDCORNERS", [4]),
+        ("BACKGROUND",    (0,0), (-1,-1), light_gray),
+        ("BOX",           (0,0), (-1,-1), 0.5, border),
+        ("TOPPADDING",    (0,0), (-1,-1), 8),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+        ("LEFTPADDING",   (0,0), (-1,-1), 12),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 12),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
     ]))
     story.append(status_tbl)
     story.append(Spacer(1, 14))
 
     # Section helper
     def section(title, rows):
-        story.append(Paragraph(title, sec_style))
+        # Section header bar
+        hdr = Table([[Paragraph(title, sec_style)]], colWidths=["100%"])
+        hdr.setStyle(TableStyle([
+            ("BACKGROUND",    (0,0), (-1,-1), black),
+            ("TOPPADDING",    (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("LEFTPADDING",   (0,0), (-1,-1), 10),
+        ]))
+        story.append(hdr)
         data = []
         for label, value in rows:
             data.append([
                 Paragraph(label, lbl_style),
                 Paragraph(str(value) if value else "—", val_style)
             ])
-        t = Table(data, colWidths=[1.6*inch, 5.4*inch])
+        t = Table(data, colWidths=[1.8*inch, 5.2*inch])
         t.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,-1), colors.HexColor("#070d1a")),
-            ("BACKGROUND",    (0,0), (0,-1),  colors.HexColor("#0c1524")),
-            ("BOX",           (0,0), (-1,-1), 1, mid),
-            ("INNERGRID",     (0,0), (-1,-1), 0.5, colors.HexColor("#13203a")),
+            ("BACKGROUND",    (0,0), (-1,-1), white),
+            ("BACKGROUND",    (0,0), (0,-1),  light_gray),
+            ("BOX",           (0,0), (-1,-1), 0.5, border),
+            ("INNERGRID",     (0,0), (-1,-1), 0.5, border),
             ("TOPPADDING",    (0,0), (-1,-1), 7),
             ("BOTTOMPADDING", (0,0), (-1,-1), 7),
             ("LEFTPADDING",   (0,0), (-1,-1), 10),
             ("RIGHTPADDING",  (0,0), (-1,-1), 10),
+            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
         ]))
         story.append(t)
 
-    # PATIENT INFO (Box 1–13 equivalent)
     section("PATIENT / INSURED INFORMATION", [
-        ("Patient Name",       claim[2]),
-        ("Date of Service",    claim[3]),
-        ("Insurance Payer",    claim[6]),
-        ("Prior Auth Required",claim[7]),
-        ("Prior Auth Status",  claim[8]),
+        ("Patient Name",        claim[2]),
+        ("Date of Service",     claim[3]),
+        ("Insurance Payer",     claim[6]),
+        ("Prior Auth Required", claim[7]),
+        ("Prior Auth Status",   claim[8]),
     ])
 
-    # PROVIDER INFO (Box 31–33 equivalent)
     if practice:
+        story.append(Spacer(1, 10))
         section("BILLING PROVIDER INFORMATION", [
             ("Practice Name",  practice[0]),
             ("NPI",            practice[3]),
@@ -833,70 +854,103 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
             ("Address",        f"{practice[5] or ''}, {practice[6] or ''}, {practice[7] or ''} {practice[8] or ''}".strip(", ")),
         ])
 
-    # DIAGNOSIS CODES (Box 21)
-    story.append(Paragraph("DIAGNOSIS CODES  —  BOX 21 (ICD-10-CM)", sec_style))
+    # DIAGNOSIS CODES
+    story.append(Spacer(1, 10))
+    diag_hdr = Table([[Paragraph("DIAGNOSIS CODES  —  BOX 21 (ICD-10-CM)", sec_style)]], colWidths=["100%"])
+    diag_hdr.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), black),
+        ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ("LEFTPADDING", (0,0), (-1,-1), 10),
+    ]))
+    story.append(diag_hdr)
     if icd10:
-        diag_data = [["#", "ICD-10 Code", "Description"]]
+        diag_data = [[
+            Paragraph("#", S("th", fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold")),
+            Paragraph("ICD-10 Code", S("th2", fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold")),
+            Paragraph("Description", S("th3", fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold")),
+        ]]
         for i, code in enumerate(icd10):
+            bg = white if i % 2 == 0 else light_gray
             if isinstance(code, dict):
-                diag_data.append([str(i+1), code.get("code",""), code.get("description","")])
+                diag_data.append([str(i+1), code.get("code",""), code.get("description","See EHR")])
             else:
                 diag_data.append([str(i+1), str(code), "See EHR for description"])
-        diag_tbl = Table(diag_data, colWidths=[0.4*inch, 1.3*inch, 5.3*inch])
+        diag_tbl = Table(diag_data, colWidths=[0.4*inch, 1.4*inch, 5.2*inch])
         diag_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,0),  colors.HexColor("#0c1524")),
-            ("BACKGROUND",    (0,1), (-1,-1), colors.HexColor("#070d1a")),
-            ("TEXTCOLOR",     (0,0), (-1,0),  green),
-            ("TEXTCOLOR",     (0,1), (-1,-1), white),
+            ("BACKGROUND",    (0,0), (-1,0),  light_gray),
+            ("TEXTCOLOR",     (0,0), (-1,-1), black),
             ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
             ("FONTNAME",      (0,1), (-1,-1), "Helvetica"),
-            ("FONTSIZE",      (0,0), (-1,-1), 8),
-            ("BOX",           (0,0), (-1,-1), 1, mid),
-            ("INNERGRID",     (0,0), (-1,-1), 0.5, colors.HexColor("#13203a")),
-            ("TOPPADDING",    (0,0), (-1,-1), 6),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("FONTSIZE",      (0,0), (-1,-1), 9),
+            ("BOX",           (0,0), (-1,-1), 0.5, border),
+            ("INNERGRID",     (0,0), (-1,-1), 0.5, border),
+            ("TOPPADDING",    (0,0), (-1,-1), 7),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 7),
             ("LEFTPADDING",   (0,0), (-1,-1), 8),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [white, light_gray]),
         ]))
         story.append(diag_tbl)
     else:
         story.append(Paragraph("No diagnosis codes recorded.", note_style))
 
+    # PROCEDURE CODES
     story.append(Spacer(1, 10))
-
-    # PROCEDURE CODES (Box 24)
-    story.append(Paragraph("PROCEDURE CODES  —  BOX 24 (CPT/HCPCS)", sec_style))
+    proc_hdr = Table([[Paragraph("PROCEDURE CODES  —  BOX 24 (CPT/HCPCS)", sec_style)]], colWidths=["100%"])
+    proc_hdr.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,-1), black),
+        ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ("LEFTPADDING", (0,0), (-1,-1), 10),
+    ]))
+    story.append(proc_hdr)
     if cpt:
-        proc_data = [["#", "CPT Code", "Description", "Units", "Charges"]]
+        proc_data = [[
+            Paragraph("#",           S("ph",  fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold")),
+            Paragraph("CPT Code",    S("ph2", fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold")),
+            Paragraph("Description", S("ph3", fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold")),
+            Paragraph("Units",       S("ph4", fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold", alignment=TA_CENTER)),
+            Paragraph("Charges",     S("ph5", fontSize=8, textColor=dark_gray, fontName="Helvetica-Bold", alignment=TA_RIGHT)),
+        ]]
         for i, code in enumerate(cpt):
             if isinstance(code, dict):
-                proc_data.append([str(i+1), code.get("code",""), code.get("description",""), "1", "$0.00"])
+                proc_data.append([str(i+1), code.get("code",""), code.get("description","See fee schedule"), "1", "$0.00"])
             else:
                 proc_data.append([str(i+1), str(code), "See fee schedule", "1", "$0.00"])
         proc_tbl = Table(proc_data, colWidths=[0.4*inch, 1.1*inch, 3.8*inch, 0.7*inch, 1.0*inch])
         proc_tbl.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,0),  colors.HexColor("#0c1524")),
-            ("BACKGROUND",    (0,1), (-1,-1), colors.HexColor("#070d1a")),
-            ("TEXTCOLOR",     (0,0), (-1,0),  green),
-            ("TEXTCOLOR",     (0,1), (-1,-1), white),
+            ("BACKGROUND",    (0,0), (-1,0),  light_gray),
+            ("TEXTCOLOR",     (0,0), (-1,-1), black),
             ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
             ("FONTNAME",      (0,1), (-1,-1), "Helvetica"),
-            ("FONTSIZE",      (0,0), (-1,-1), 8),
-            ("BOX",           (0,0), (-1,-1), 1, mid),
-            ("INNERGRID",     (0,0), (-1,-1), 0.5, colors.HexColor("#13203a")),
-            ("TOPPADDING",    (0,0), (-1,-1), 6),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("FONTSIZE",      (0,0), (-1,-1), 9),
+            ("BOX",           (0,0), (-1,-1), 0.5, border),
+            ("INNERGRID",     (0,0), (-1,-1), 0.5, border),
+            ("TOPPADDING",    (0,0), (-1,-1), 7),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 7),
             ("LEFTPADDING",   (0,0), (-1,-1), 8),
             ("ALIGN",         (3,0), (-1,-1), "CENTER"),
+            ("ROWBACKGROUNDS",(0,1), (-1,-1), [white, light_gray]),
         ]))
         story.append(proc_tbl)
     else:
         story.append(Paragraph("No procedure codes recorded.", note_style))
 
-    # Notes / denial
+    # Notes
     if claim[12]:
         story.append(Spacer(1, 10))
-        story.append(Paragraph("NOTES", sec_style))
-        story.append(Paragraph(claim[12], note_style))
+        notes_hdr = Table([[Paragraph("NOTES", sec_style)]], colWidths=["100%"])
+        notes_hdr.setStyle(TableStyle([
+            ("BACKGROUND", (0,0), (-1,-1), black),
+            ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+            ("LEFTPADDING", (0,0), (-1,-1), 10),
+        ]))
+        story.append(notes_hdr)
+        notes_tbl = Table([[Paragraph(claim[12], note_style)]], colWidths=["100%"])
+        notes_tbl.setStyle(TableStyle([
+            ("BOX", (0,0), (-1,-1), 0.5, border),
+            ("TOPPADDING", (0,0), (-1,-1), 8), ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+            ("LEFTPADDING", (0,0), (-1,-1), 10), ("RIGHTPADDING", (0,0), (-1,-1), 10),
+        ]))
+        story.append(notes_tbl)
 
     if claim[13]:
         story.append(Spacer(1, 10))
@@ -905,13 +959,13 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
 
     # Footer
     story.append(Spacer(1, 20))
-    story.append(HRFlowable(width="100%", thickness=0.5, color=mid, spaceAfter=8))
+    story.append(HRFlowable(width="100%", thickness=0.5, color=border, spaceAfter=8))
     story.append(Paragraph(
-        f"Generated by Claimflow  ·  {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}  ·  HIPAA Compliant  ·  claimflowpay.com",
+        f"Generated by Claimflow  ·  {datetime.utcnow().strftime('%B %d, %Y  %H:%M UTC')}  ·  HIPAA Compliant  ·  claimflowpay.com",
         foot_style
     ))
     story.append(Paragraph(
-        "This document is for billing reference only. Charges shown as $0.00 should be completed per your practice fee schedule before submission.",
+        "For billing reference only. Complete charges per your practice fee schedule before submission.",
         foot_style
     ))
 
