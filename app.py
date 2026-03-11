@@ -110,7 +110,7 @@ def send_reset_email(to_email: str, reset_token: str):
         response = httpx.post(
             "https://api.resend.com/emails",
             headers={"Authorization": f"Bearer {RESEND_API_KEY}", "Content-Type": "application/json"},
-            json={"from": "Claimflow <onboarding@resend.dev>", "to": [to_email],
+            json={"from": "Claimflow <noreply@claimflowpay.com>", "to": [to_email],
                   "subject": "Reset your Claimflow password", "html": html},
             timeout=10
         )
