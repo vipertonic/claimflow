@@ -750,16 +750,16 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
     dark_gray = colors.HexColor("#444444")
     mid_gray  = colors.HexColor("#888888")
     light_gray= colors.HexColor("#f2f2f2")
+    sec_gray  = colors.HexColor("#555555")
     border    = colors.HexColor("#cccccc")
-    green     = colors.HexColor("#00a85a")
     white     = colors.white
 
     def S(name, **kw):
         return ParagraphStyle(name, **kw)
 
-    hdr_style  = S("hdr",  fontSize=22, textColor=black,     fontName="Helvetica-Bold", spaceAfter=2)
-    sub_style  = S("sub",  fontSize=9,  textColor=mid_gray,  fontName="Helvetica",      spaceAfter=14)
-    sec_style  = S("sec",  fontSize=8,  textColor=white,     fontName="Helvetica-Bold", spaceBefore=14, spaceAfter=0)
+    hdr_style  = S("hdr",  fontSize=22, textColor=black,     fontName="Helvetica-Bold", spaceAfter=0, leading=26)
+    sub_style  = S("sub",  fontSize=9,  textColor=mid_gray,  fontName="Helvetica",      spaceAfter=14, spaceBefore=6)
+    sec_style  = S("sec",  fontSize=8,  textColor=white,     fontName="Helvetica-Bold", spaceBefore=0, spaceAfter=0)
     lbl_style  = S("lbl",  fontSize=8,  textColor=dark_gray, fontName="Helvetica")
     val_style  = S("val",  fontSize=9,  textColor=black,     fontName="Helvetica-Bold")
     note_style = S("note", fontSize=9,  textColor=black,     fontName="Helvetica", leading=14)
@@ -767,21 +767,13 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
 
     story = []
 
-    # Header — logo left, claim info right
-    hdr_data = [[
-        Paragraph("CLAIMFLOW", hdr_style),
-        Paragraph(f"Claim #{claim[0]}<br/><font size=8 color='#888888'>{datetime.utcnow().strftime('%B %d, %Y')}</font>",
-                  S("hr", fontSize=11, textColor=black, fontName="Helvetica-Bold", alignment=TA_RIGHT))
-    ]]
-    hdr_tbl = Table(hdr_data, colWidths=["60%","40%"])
-    hdr_tbl.setStyle(TableStyle([
-        ("VALIGN",  (0,0), (-1,-1), "BOTTOM"),
-        ("TOPPADDING",    (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 0),
-    ]))
-    story.append(hdr_tbl)
-    story.append(Paragraph("Claim Summary  ·  CMS-1500 Reference Format", sub_style))
-    story.append(HRFlowable(width="100%", thickness=1.5, color=black, spaceAfter=14))
+    # Header — stacked, no overlap
+    story.append(Paragraph("CLAIMFLOW", hdr_style))
+    story.append(Paragraph(
+        f"Claim Summary  ·  CMS-1500 Reference Format  ·  Claim #{claim[0]}  ·  {datetime.utcnow().strftime('%B %d, %Y')}",
+        sub_style
+    ))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cccccc"), spaceAfter=14))
 
     # Status row
     status_color = colors.HexColor("#1a7a40") if claim[9] == "APPROVED" \
@@ -809,7 +801,7 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
         # Section header bar
         hdr = Table([[Paragraph(title, sec_style)]], colWidths=["100%"])
         hdr.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,-1), black),
+            ("BACKGROUND",    (0,0), (-1,-1), sec_gray),
             ("TOPPADDING",    (0,0), (-1,-1), 6),
             ("BOTTOMPADDING", (0,0), (-1,-1), 6),
             ("LEFTPADDING",   (0,0), (-1,-1), 10),
@@ -858,7 +850,7 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
     story.append(Spacer(1, 10))
     diag_hdr = Table([[Paragraph("DIAGNOSIS CODES  —  BOX 21 (ICD-10-CM)", sec_style)]], colWidths=["100%"])
     diag_hdr.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), black),
+        ("BACKGROUND", (0,0), (-1,-1), sec_gray),
         ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6),
         ("LEFTPADDING", (0,0), (-1,-1), 10),
     ]))
@@ -897,7 +889,7 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
     story.append(Spacer(1, 10))
     proc_hdr = Table([[Paragraph("PROCEDURE CODES  —  BOX 24 (CPT/HCPCS)", sec_style)]], colWidths=["100%"])
     proc_hdr.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), black),
+        ("BACKGROUND", (0,0), (-1,-1), sec_gray),
         ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6),
         ("LEFTPADDING", (0,0), (-1,-1), 10),
     ]))
@@ -939,7 +931,7 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
         story.append(Spacer(1, 10))
         notes_hdr = Table([[Paragraph("NOTES", sec_style)]], colWidths=["100%"])
         notes_hdr.setStyle(TableStyle([
-            ("BACKGROUND", (0,0), (-1,-1), black),
+            ("BACKGROUND", (0,0), (-1,-1), sec_gray),
             ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6),
             ("LEFTPADDING", (0,0), (-1,-1), 10),
         ]))
