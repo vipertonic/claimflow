@@ -282,7 +282,7 @@ def verify_npi(npi: str):
 
 def extract_medical_codes(clinical_note):
     response = client.messages.create(
-        model="claude-opus-4-6", max_tokens=1000,
+        model="claude-opus-4-5", max_tokens=1000,
         system='You are a certified medical coder (CPC). Extract ICD-10 and CPT codes. Return JSON only: {"icd10": ["E11.9"], "cpt": ["99213"]}',
         messages=[{"role": "user", "content": "Extract codes:\n\n" + clinical_note}]
     )
@@ -932,7 +932,7 @@ def process_denial(req: DenialRequest, user=Depends(verify_token)):
         raise HTTPException(status_code=404, detail="Claim not found")
     denial_info = categorize_denial(req.denial_code)
     response = client.messages.create(
-        model="claude-opus-4-6", max_tokens=1500,
+        model="claude-opus-4-5", max_tokens=1500,
         system="You are an expert medical billing appeals specialist with 20 years of experience.",
         messages=[{"role": "user", "content":
             f"Write a formal appeal letter:\nPatient: {row[2]}\nInsurance: {row[6]}\n"
