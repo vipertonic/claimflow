@@ -3,14 +3,18 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Claimflow — Login</title>
+  <title>Claimflowpay — Login</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{background:#0a0a0a;color:#e0e0e0;font-family:'DM Mono',monospace;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
     .container{width:100%;max-width:520px;}
     .logo{text-align:center;margin-bottom:32px;}
-    .logo h1{font-size:2rem;font-weight:500;color:#00ff88;letter-spacing:3px;}
+    .logo-row{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:8px;}
+    .logo-icon{width:36px;height:36px;background:#00c96b;border-radius:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .logo-wordmark{display:flex;align-items:baseline;font-size:1.35rem;font-weight:500;letter-spacing:-0.01em;}
+    .logo-wordmark .w1{color:#ffffff;}
+    .logo-wordmark .w2{color:#00c96b;}
     .logo p{color:#444;font-size:0.68rem;margin-top:6px;letter-spacing:1px;}
     .card{background:#111;border:1px solid #1e1e1e;border-radius:8px;padding:32px;}
     .tabs{display:flex;margin-bottom:26px;border-bottom:1px solid #1e1e1e;}
@@ -44,7 +48,14 @@
 <body>
 <div class="container">
   <div class="logo">
-    <h1>CLAIMFLOW</h1>
+    <div class="logo-row">
+      <div class="logo-icon">
+        <svg width="20" height="20" viewBox="0 0 22 22" fill="none">
+          <path d="M4 11 L9 16 L18 7" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="logo-wordmark"><span class="w1">Claimflow</span><span class="w2">pay</span></div>
+    </div>
     <p>AI MEDICAL BILLING PLATFORM</p>
   </div>
 

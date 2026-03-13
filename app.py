@@ -768,7 +768,7 @@ def claim_summary_pdf(claim_id: int, user=Depends(verify_token)):
     story = []
 
     # Header — stacked, no overlap
-    story.append(Paragraph("CLAIMFLOW", hdr_style))
+    story.append(Paragraph("CLAIMFLOWPAY", hdr_style))
     story.append(Paragraph(
         f"Claim Summary  ·  CMS-1500 Reference Format  ·  Claim #{claim[0]}  ·  {datetime.utcnow().strftime('%B %d, %Y')}",
         sub_style
