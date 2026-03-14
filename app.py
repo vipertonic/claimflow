@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, validator, field_validator
 from typing import Optional
 import uvicorn
 import bcrypt
@@ -328,12 +328,113 @@ def categorize_denial(code):
     return {"denial_code": code, "reason": reason, "category": cat, "recommended_action": action}
 
 
+# ── Input Sanitization Helpers ──────────────────────────────────────────────
+
+def sanitize_text(v: str, max_len: int = 500) -> str:
+    """Strip whitespace, remove null bytes, limit length."""
+    if not isinstance(v, str):
+        raise ValueError("Must be a string")
+    v = v.replace("\x00", "").strip()
+    if len(v) > max_len:
+        raise ValueError(f"Input exceeds maximum length of {max_len} characters")
+    return v
+
+def sanitize_name(v: str) -> str:
+    """Practice/patient name — letters, numbers, spaces, hyphens, apostrophes, periods, commas."""
+    v = sanitize_text(v, 200)
+    if not re.match(r"^[A-Za-z0-9 ',.\-&()]+$", v):
+        raise ValueError("Name contains invalid characters")
+    return v
+
+def sanitize_email(v: str) -> str:
+    """Basic email format validation."""
+    v = sanitize_text(v, 254)
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+        raise ValueError("Invalid email address")
+    return v.lower()
+
+def sanitize_phone(v: str) -> str:
+    """Digits, spaces, hyphens, parentheses, plus sign only."""
+    v = sanitize_text(v, 20)
+    cleaned = re.sub(r"[\s\-().+]", "", v)
+    if not cleaned.isdigit() or len(cleaned) < 7:
+        raise ValueError("Invalid phone number")
+    return v
+
+def sanitize_npi(v: str) -> str:
+    """NPI must be exactly 10 digits."""
+    v = sanitize_text(v, 10)
+    if not re.match(r"^\d{10}$", v):
+        raise ValueError("NPI must be exactly 10 digits")
+    return v
+
+def sanitize_password(v: str) -> str:
+    """Minimum 8 chars, max 128, no null bytes."""
+    v = v.replace("\x00", "").strip()
+    if len(v) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    if len(v) > 128:
+        raise ValueError("Password too long")
+    return v
+
+def sanitize_date(v: str) -> str:
+    """Date must be YYYY-MM-DD format."""
+    v = sanitize_text(v, 10)
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+        raise ValueError("Date must be in YYYY-MM-DD format")
+    return v
+
+def sanitize_clinical_note(v: str) -> str:
+    """Clinical notes — allow most characters but strip null bytes, limit to 20,000 chars."""
+    v = v.replace("\x00", "").strip()
+    if len(v) > 20000:
+        raise ValueError("Clinical note exceeds maximum length")
+    if len(v) < 10:
+        raise ValueError("Clinical note is too short")
+    return v
+
+def sanitize_status(v: str) -> str:
+    """Claim status must be one of the allowed values."""
+    allowed = {"SUBMITTED", "APPROVED", "DENIED", "PENDING", "APPEALED", "PAID"}
+    v = sanitize_text(v, 20).upper()
+    if v not in allowed:
+        raise ValueError(f"Invalid status. Must be one of: {', '.join(allowed)}")
+    return v
+
+def sanitize_zip(v: str) -> str:
+    """ZIP code — 5 digits or 5+4 format."""
+    v = sanitize_text(v, 10)
+    if not re.match(r"^\d{5}(-\d{4})?$", v):
+        raise ValueError("Invalid ZIP code")
+    return v
+
+def sanitize_token(v: str) -> str:
+    """Token — alphanumeric only."""
+    v = sanitize_text(v, 512)
+    if not re.match(r"^[A-Za-z0-9\-_\.]+$", v):
+        raise ValueError("Invalid token format")
+    return v
+
+# ── Request Models ───────────────────────────────────────────────────────────
+
 class ForgotPasswordRequest(BaseModel):
     email: str
+
+    @field_validator("email")
+    @classmethod
+    def val_email(cls, v): return sanitize_email(v)
 
 class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
+
+    @field_validator("token")
+    @classmethod
+    def val_token(cls, v): return sanitize_token(v)
+
+    @field_validator("new_password")
+    @classmethod
+    def val_password(cls, v): return sanitize_password(v)
 
 class RegisterRequest(BaseModel):
     practice_name: str
@@ -346,18 +447,78 @@ class RegisterRequest(BaseModel):
     city: Optional[str] = None
     zip: Optional[str] = None
 
+    @field_validator("practice_name")
+    @classmethod
+    def val_name(cls, v): return sanitize_name(v)
+
+    @field_validator("email")
+    @classmethod
+    def val_email(cls, v): return sanitize_email(v) if v else v
+
+    @field_validator("phone")
+    @classmethod
+    def val_phone(cls, v): return sanitize_phone(v) if v else v
+
+    @field_validator("password")
+    @classmethod
+    def val_password(cls, v): return sanitize_password(v)
+
+    @field_validator("npi")
+    @classmethod
+    def val_npi(cls, v): return sanitize_npi(v)
+
+    @field_validator("license_number")
+    @classmethod
+    def val_license(cls, v): return sanitize_text(v, 50)
+
+    @field_validator("address")
+    @classmethod
+    def val_address(cls, v): return sanitize_text(v, 200) if v else v
+
+    @field_validator("city")
+    @classmethod
+    def val_city(cls, v): return sanitize_text(v, 100) if v else v
+
+    @field_validator("zip")
+    @classmethod
+    def val_zip(cls, v): return sanitize_zip(v) if v else v
+
 class LoginRequest(BaseModel):
     identifier: str
     password: str
     stay_logged_in: Optional[bool] = False
 
+    @field_validator("identifier")
+    @classmethod
+    def val_identifier(cls, v): return sanitize_text(v, 254)
+
+    @field_validator("password")
+    @classmethod
+    def val_password(cls, v): return sanitize_text(v, 128)
+
 class VerifyNPIRequest(BaseModel):
     npi: str
+
+    @field_validator("npi")
+    @classmethod
+    def val_npi(cls, v): return sanitize_npi(v)
 
 class WaitlistRequest(BaseModel):
     email: str
     state: Optional[str] = ""
     state_code: Optional[str] = ""
+
+    @field_validator("email")
+    @classmethod
+    def val_email(cls, v): return sanitize_email(v)
+
+    @field_validator("state")
+    @classmethod
+    def val_state(cls, v): return sanitize_text(v, 100) if v else v
+
+    @field_validator("state_code")
+    @classmethod
+    def val_state_code(cls, v): return sanitize_text(v, 10) if v else v
 
 class ProcessClaimRequest(BaseModel):
     patient_name: str
@@ -365,14 +526,42 @@ class ProcessClaimRequest(BaseModel):
     payer: str
     clinical_note: str
 
+    @field_validator("patient_name")
+    @classmethod
+    def val_name(cls, v): return sanitize_name(v)
+
+    @field_validator("date_of_service")
+    @classmethod
+    def val_date(cls, v): return sanitize_date(v)
+
+    @field_validator("payer")
+    @classmethod
+    def val_payer(cls, v): return sanitize_text(v, 100)
+
+    @field_validator("clinical_note")
+    @classmethod
+    def val_note(cls, v): return sanitize_clinical_note(v)
+
 class DenialRequest(BaseModel):
     claim_id: int
     denial_code: str
+
+    @field_validator("denial_code")
+    @classmethod
+    def val_denial_code(cls, v): return sanitize_text(v, 200)
 
 class UpdateStatusRequest(BaseModel):
     claim_id: int
     new_status: str
     notes: str = ""
+
+    @field_validator("new_status")
+    @classmethod
+    def val_status(cls, v): return sanitize_status(v)
+
+    @field_validator("notes")
+    @classmethod
+    def val_notes(cls, v): return sanitize_text(v, 1000) if v else v
 
 
 @app.get("/")
@@ -625,6 +814,18 @@ def check_sms_verification(phone: str, code: str) -> bool:
 class PhoneVerifyRequest(BaseModel):
     phone: str
     code: str
+
+    @field_validator("phone")
+    @classmethod
+    def val_phone(cls, v): return sanitize_phone(v)
+
+    @field_validator("code")
+    @classmethod
+    def val_code(cls, v):
+        v = sanitize_text(v, 10)
+        if not re.match(r"^\d{4,8}$", v):
+            raise ValueError("Invalid verification code")
+        return v
 
 @app.post("/verify-phone")
 def verify_phone(req: PhoneVerifyRequest):
