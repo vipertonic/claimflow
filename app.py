@@ -806,7 +806,7 @@ def verify_email(token: str):
     <script>
     localStorage.setItem('cf_token', JSON.stringify({{token:'{jwt_token}',expires:Date.now()+7200000}}));
     localStorage.setItem('cf_practice', '{practice_name}');
-    setTimeout(()=>window.location.href='/billing', 1500);
+    setTimeout(()=>window.location.href='/onboarding', 1500);
     </script></body></html>"""
     return HTMLResponse(content=html)
 
@@ -1293,6 +1293,11 @@ def get_stats(user=Depends(verify_token)):
 @app.get("/billing")
 def serve_billing():
     p = os.path.join(os.path.dirname(__file__), "billing.html")
+    return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Not found"}
+
+@app.get("/onboarding")
+def serve_onboarding():
+    p = os.path.join(os.path.dirname(__file__), "onboarding.html")
     return FileResponse(p, media_type="text/html") if os.path.exists(p) else {"message": "Not found"}
 
 @app.get("/register")
