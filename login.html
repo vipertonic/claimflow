@@ -265,14 +265,13 @@
       if(!res.ok){showAlert(data.detail||'Login failed.');return;}
       localStorage.setItem('cf_token',data.token);
       localStorage.setItem('cf_practice',data.practice_name);
-      // Check if phone login needs SMS verification
-      const isPhone = id.startsWith('+') || /^\d{10,}$/.test(id.replace(/\D/g,''));
-      if(isPhone && !isDeviceTrusted(id)){
+      // 2FA — trigger SMS for ALL logins on untrusted devices
+      const phone = data.phone || id;
+      const deviceKey = data.phone || id;
+      if(phone && !isDeviceTrusted(deviceKey)){
         showAlert('Login successful! Verifying your device...','success');
-        // Send SMS code
-        await fetch(API+'/resend-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:id})});
-        showSmsModal(id);
-        // Override redirect after SMS verification to go to dashboard
+        await fetch(API+'/resend-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone:phone})});
+        showSmsModal(deviceKey);
         window._smsRedirect = '/dashboard';
       } else {
         showAlert('Login successful! Redirecting...','success');

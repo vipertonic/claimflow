@@ -898,7 +898,8 @@ def login(req: LoginRequest, request: Request):
     token = create_token(practice[0], identifier, hours=hours)
     audit("LOGIN_SUCCESS", practice_id=practice[0], identifier=identifier, ip=ip)
     return {"message": "Login successful!", "token": token,
-            "practice_name": practice[1], "identifier": identifier}
+            "practice_name": practice[1], "identifier": identifier,
+            "phone": practice[3] or ""}
 
 @app.post("/logout")
 def logout(credentials: HTTPAuthorizationCredentials = Depends(security), user=Depends(verify_token)):
