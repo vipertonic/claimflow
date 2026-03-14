@@ -226,40 +226,104 @@
   <div class="step-card" id="step2">
     <div class="step-tag">Step 2 of 4</div>
     <h2 class="step-title">See Claimflowpay<br/><em>in action</em></h2>
-    <p class="step-desc">Watch how Claimflowpay turns a clinical note into a coded, submitted claim in under 60 seconds.</p>
-    <div class="demo-wrap">
-      <div class="demo-placeholder">
-        <div class="demo-play" onclick="playDemo()">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-            <path d="M8 5v14l11-7z"/>
-          </svg>
+    <p class="step-desc">Watch how Claimflowpay turns a clinical note into a coded, submitted claim in seconds.</p>
+
+    <!-- INTERACTIVE DEMO PLAYER -->
+    <div id="demoPlayer" style="background:var(--bg);border:1px solid var(--border2);border-radius:12px;overflow:hidden;margin-bottom:24px;">
+
+      <!-- Demo header bar -->
+      <div style="background:var(--bg3);padding:10px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+        <div style="width:10px;height:10px;border-radius:50%;background:#ff5f57"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#febc2e"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#28c840"></div>
+        <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--muted);margin-left:8px;">app.claimflowpay.com/dashboard</div>
+      </div>
+
+      <!-- Demo stage -->
+      <div style="padding:24px;min-height:320px;position:relative;">
+
+        <!-- Stage 0: Intro -->
+        <div class="demo-stage" id="dstage0" style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:280px;text-align:center;">
+          <div style="width:56px;height:56px;background:var(--green);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+            <svg width="28" height="28" viewBox="0 0 22 22" fill="none"><path d="M4 11 L9 16 L18 7" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="font-family:'Instrument Serif',serif;font-size:1.4rem;margin-bottom:8px;">Interactive Demo</div>
+          <div style="color:var(--sub);font-size:.82rem;max-width:360px;line-height:1.6;margin-bottom:24px;">See how a clinical note becomes a submitted claim — step by step, powered by AI.</div>
+          <button class="btn-primary" onclick="startDemo()" style="margin:0 auto;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            Play Demo
+          </button>
         </div>
-        <div class="demo-title" style="color:var(--sub);font-size:.85rem;">Claimflowpay Platform Overview</div>
-        <div style="font-family:'DM Mono',monospace;font-size:.68rem;color:var(--muted);">3 min 42 sec</div>
+
+        <!-- Stage 1: Typing clinical note -->
+        <div class="demo-stage" id="dstage1" style="display:none;">
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--green);letter-spacing:1.5px;margin-bottom:12px;">STEP 1 — PASTE CLINICAL NOTE</div>
+          <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:16px;font-size:.8rem;color:var(--sub);line-height:1.8;min-height:120px;font-family:'Manrope',sans-serif;">
+            <span id="typingText"></span><span id="typingCursor" style="color:var(--green);animation:pulse 1s infinite;">|</span>
+          </div>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
+            <div style="width:8px;height:8px;background:var(--green);border-radius:50%;animation:pulse 1s infinite;"></div>
+            <span style="font-size:.72rem;color:var(--muted);">AI is reading your clinical note...</span>
+          </div>
+        </div>
+
+        <!-- Stage 2: AI processing -->
+        <div class="demo-stage" id="dstage2" style="display:none;">
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--green);letter-spacing:1.5px;margin-bottom:16px;">STEP 2 — AI EXTRACTING CODES</div>
+          <div style="display:flex;flex-direction:column;gap:10px;" id="processingLines"></div>
+        </div>
+
+        <!-- Stage 3: Codes revealed -->
+        <div class="demo-stage" id="dstage3" style="display:none;">
+          <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--green);letter-spacing:1.5px;margin-bottom:16px;">STEP 3 — CODES EXTRACTED</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:14px;">
+              <div style="font-size:.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:10px;">ICD-10 DIAGNOSIS</div>
+              <div style="display:flex;flex-direction:column;gap:6px;" id="icdCodes"></div>
+            </div>
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:14px;">
+              <div style="font-size:.65rem;color:var(--muted);letter-spacing:1px;margin-bottom:10px;">CPT PROCEDURES</div>
+              <div style="display:flex;flex-direction:column;gap:6px;" id="cptCodes"></div>
+            </div>
+          </div>
+          <div style="background:rgba(255,180,0,.06);border:1px solid rgba(255,180,0,.2);border-radius:8px;padding:12px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:.9rem;">⚡</span>
+            <span style="font-size:.78rem;color:#f4c430;">Prior auth check: <strong>ECG (93000) — No auth required · Diabetes (99213) — No auth required</strong></span>
+          </div>
+        </div>
+
+        <!-- Stage 4: Claim submitted -->
+        <div class="demo-stage" id="dstage4" style="display:none;text-align:center;padding:20px 0;">
+          <div style="width:56px;height:56px;background:var(--green);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;animation:checkPop .4s ease;">
+            <svg width="28" height="28" viewBox="0 0 22 22" fill="none"><path d="M4 11 L9 16 L18 7" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div style="font-family:'Instrument Serif',serif;font-size:1.5rem;margin-bottom:8px;">Claim Submitted</div>
+          <div style="color:var(--sub);font-size:.82rem;margin-bottom:20px;">Claim #1042 filed to UnitedHealthcare · Tracking active</div>
+          <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;font-family:'DM Mono',monospace;font-size:.7rem;">
+              <span style="color:var(--muted);">CLAIM ID</span><br/><span style="color:var(--text)">#1042</span>
+            </div>
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;font-family:'DM Mono',monospace;font-size:.7rem;">
+              <span style="color:var(--muted);">STATUS</span><br/><span style="color:var(--green)">SUBMITTED</span>
+            </div>
+            <div style="background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;font-family:'DM Mono',monospace;font-size:.7rem;">
+              <span style="color:var(--muted);">PAYER</span><br/><span style="color:var(--text)">UnitedHealthcare</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Progress dots -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-top:1px solid var(--border);">
+        <div class="ddot" id="ddot0" style="width:8px;height:8px;border-radius:50%;background:var(--green);transition:all .3s"></div>
+        <div class="ddot" id="ddot1" style="width:8px;height:8px;border-radius:50%;background:var(--border2);transition:all .3s"></div>
+        <div class="ddot" id="ddot2" style="width:8px;height:8px;border-radius:50%;background:var(--border2);transition:all .3s"></div>
+        <div class="ddot" id="ddot3" style="width:8px;height:8px;border-radius:50%;background:var(--border2);transition:all .3s"></div>
+        <div class="ddot" id="ddot4" style="width:8px;height:8px;border-radius:50%;background:var(--border2);transition:all .3s"></div>
       </div>
     </div>
-    <ul class="demo-chapters">
-      <li class="demo-chapter">
-        <div class="demo-chapter-dot"></div>
-        <span class="demo-chapter-time">0:00</span>
-        <span>Pasting a clinical note</span>
-      </li>
-      <li class="demo-chapter">
-        <div class="demo-chapter-dot"></div>
-        <span class="demo-chapter-time">0:45</span>
-        <span>AI extracts ICD-10 and CPT codes</span>
-      </li>
-      <li class="demo-chapter">
-        <div class="demo-chapter-dot"></div>
-        <span class="demo-chapter-time">1:30</span>
-        <span>Prior authorization check</span>
-      </li>
-      <li class="demo-chapter">
-        <div class="demo-chapter-dot"></div>
-        <span class="demo-chapter-time">2:15</span>
-        <span>Claim submitted and tracked</span>
-      </li>
-    </ul>
+
     <div class="btn-row">
       <button class="btn-ghost" onclick="prevStep()">← Back</button>
       <div style="display:flex;align-items:center;gap:10px;">
@@ -426,10 +490,86 @@
     setTimeout(()=>{ btn.disabled=false; btn.innerHTML='Save & Continue <span>→</span>'; nextStep(); }, 600);
   }
 
-  function playDemo(){
-    // Placeholder — wire up to actual video URL when ready
-    alert('Demo video coming soon! For now, explore the dashboard to see Claimflowpay in action.');
+  // ---- Interactive Demo ----
+  const DEMO_NOTE = "Patient: John Davis, DOB 04/12/1968. Presents with uncontrolled Type 2 diabetes mellitus. HbA1c 9.4%, fasting glucose 218. Hypertension, BP 152/94. Prescribed metformin 1000mg BID and lisinopril 10mg QD. ECG performed — normal sinus rhythm, no ST changes. Follow up in 6 weeks.";
+  const DEMO_ICD = [{code:'E11.65',desc:'Type 2 diabetes, hyperglycemia'},{code:'I10',desc:'Essential hypertension'},{code:'Z79.4',desc:'Long-term insulin use'}];
+  const DEMO_CPT = [{code:'99213',desc:'Office visit, est. patient'},{code:'93000',desc:'Electrocardiogram, routine'}];
+  let demoRunning = false;
+
+  function showDemoStage(n){
+    document.querySelectorAll('.demo-stage').forEach((s,i)=>{ s.style.display = i===n?'block':'none'; });
+    document.querySelectorAll('.ddot').forEach((d,i)=>{ d.style.background = i===n?'var(--green)':'var(--border2)'; d.style.width = i===n?'20px':'8px'; d.style.borderRadius='100px'; });
   }
+
+  async function startDemo(){
+    if(demoRunning) return;
+    demoRunning = true;
+    // Stage 1: type note
+    showDemoStage(1);
+    const el = document.getElementById('typingText');
+    el.textContent = '';
+    for(let i=0;i<DEMO_NOTE.length;i++){
+      el.textContent += DEMO_NOTE[i];
+      await sleep(18);
+    }
+    await sleep(600);
+    // Stage 2: processing lines
+    showDemoStage(2);
+    const lines = [
+      'Scanning clinical note...',
+      'Identifying diagnoses...',
+      'Matching ICD-10 codes...',
+      'Identifying procedures...',
+      'Matching CPT codes...',
+      'Checking prior auth rules...',
+      'Generating claim...',
+    ];
+    const container = document.getElementById('processingLines');
+    container.innerHTML = '';
+    for(let line of lines){
+      const div = document.createElement('div');
+      div.style.cssText = 'display:flex;align-items:center;gap:10px;font-size:.78rem;color:var(--sub);opacity:0;transition:opacity .3s;';
+      div.innerHTML = `<div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0;animation:pulse 1s infinite"></div>${line}`;
+      container.appendChild(div);
+      await sleep(50);
+      div.style.opacity = '1';
+      await sleep(380);
+      div.innerHTML = `<div style="width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0"></div><span style="color:var(--green)">✓</span> ${line}`;
+    }
+    await sleep(400);
+    // Stage 3: show codes
+    showDemoStage(3);
+    const icdEl = document.getElementById('icdCodes');
+    const cptEl = document.getElementById('cptCodes');
+    icdEl.innerHTML = ''; cptEl.innerHTML = '';
+    for(let c of DEMO_ICD){
+      const d = document.createElement('div');
+      d.style.cssText = 'display:flex;flex-direction:column;gap:2px;opacity:0;transition:opacity .3s;';
+      d.innerHTML = `<span style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--green);font-weight:600">${c.code}</span><span style="font-size:.68rem;color:var(--muted)">${c.desc}</span>`;
+      icdEl.appendChild(d);
+      await sleep(100);
+      d.style.opacity='1';
+      await sleep(200);
+    }
+    for(let c of DEMO_CPT){
+      const d = document.createElement('div');
+      d.style.cssText = 'display:flex;flex-direction:column;gap:2px;opacity:0;transition:opacity .3s;';
+      d.innerHTML = `<span style="font-family:'DM Mono',monospace;font-size:.75rem;color:#4d9fff;font-weight:600">${c.code}</span><span style="font-size:.68rem;color:var(--muted)">${c.desc}</span>`;
+      cptEl.appendChild(d);
+      await sleep(100);
+      d.style.opacity='1';
+      await sleep(200);
+    }
+    await sleep(1800);
+    // Stage 4: submitted
+    showDemoStage(4);
+    await sleep(3000);
+    // Loop back to intro
+    showDemoStage(0);
+    demoRunning = false;
+  }
+
+  function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
   async function runDemoCode(){
     const note = document.getElementById('demoNote').value.trim();
