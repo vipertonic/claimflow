@@ -261,19 +261,31 @@ def verify_npi(npi: str):
             last = basic.get("last_name", "")
             credential = basic.get("credential", "")
             name = f"{first} {last}, {credential}".strip(", ")
+            org_name = f"{first} {last}".strip()
             provider_type = "Individual Provider"
         else:
             name = basic.get("organization_name", "")
+            org_name = name
             provider_type = "Organization"
+        # Extract address, phone from NPPES
         addresses = result.get("addresses", [])
-        state = ""
+        address_line = city = state = zip_code = phone = ""
         for addr in addresses:
             if addr.get("address_purpose") == "LOCATION":
+                address_line = addr.get("address_1", "")
+                city = addr.get("city", "").title()
                 state = addr.get("state", "")
+                zip_code = addr.get("postal_code", "")[:5]
+                phone_raw = addr.get("telephone_number", "")
+                phone = re.sub(r"[^\d]", "", phone_raw)
                 break
         if basic.get("status", "") != "A":
             return {"valid": False, "error": "This NPI is no longer active."}
-        return {"valid": True, "name": name, "type": provider_type, "state": state, "error": None}
+        return {
+            "valid": True, "name": name, "type": provider_type,
+            "org_name": org_name, "state": state, "error": None,
+            "address": address_line, "city": city, "zip": zip_code, "phone": phone
+        }
     except httpx.TimeoutException:
         return {"valid": False, "error": "NPI verification timed out. Please try again."}
     except Exception:

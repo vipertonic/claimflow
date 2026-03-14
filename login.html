@@ -205,6 +205,12 @@
         el.textContent='VERIFIED · '+(data.type||'Provider')+(data.state?' · '+data.state:'');
         document.getElementById('npiVerifiedName').value=data.name;
         document.getElementById('npiNameWrap').style.display='block';
+        // Autofill form fields from NPPES
+        if(data.org_name) setIfEmpty('rPractice', data.org_name);
+        if(data.address)  setIfEmpty('rAddress', data.address);
+        if(data.city)     setIfEmpty('rCity', data.city);
+        if(data.zip)      setIfEmpty('rZip', data.zip);
+        if(data.phone)    setIfEmpty('rPhone', data.phone);
       } else {
         npiVerified=false;
         el.className='npi-status invalid';
@@ -212,6 +218,11 @@
         document.getElementById('npiNameWrap').style.display='none';
       }
     } catch(e){el.className='npi-status invalid';el.textContent='Verification failed. Try again.';}
+  }
+
+  function setIfEmpty(id, value){
+    var el=document.getElementById(id);
+    if(el && !el.value.trim()) el.value=value;
   }
 
   // ---- License Validation ----
