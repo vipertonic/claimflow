@@ -1271,6 +1271,21 @@ def get_audit_log(user=Depends(verify_token)):
     conn.close()
     return {"events": [{"timestamp": r[0], "action": r[1], "ip": r[2], "details": r[3]} for r in rows]}
 
+@app.get("/profile")
+def get_profile(user=Depends(verify_token)):
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('SELECT practice_name, email, phone, npi, npi_name, address, city, state, zip FROM practices WHERE id=?', (user["practice_id"],))
+    p = cursor.fetchone()
+    conn.close()
+    if not p:
+        raise HTTPException(status_code=404, detail="Practice not found")
+    return {
+        "practice_name": p[0] or "", "email": p[1] or "", "phone": p[2] or "",
+        "npi": p[3] or "", "npi_name": p[4] or "", "address": p[5] or "",
+        "city": p[6] or "", "state": p[7] or "", "zip": p[8] or ""
+    }
+
 @app.get("/stats")
 def get_stats(user=Depends(verify_token)):
     pid = user["practice_id"]

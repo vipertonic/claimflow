@@ -407,15 +407,15 @@
   // Load practice info from API
   async function loadPracticeInfo(){
     try{
-      const res = await fetch(API+'/stats', {headers: authHeaders()});
+      const res = await fetch(API+'/profile', {headers: authHeaders()});
       if(!res.ok) return;
       const data = await res.json();
       if(data.practice_name) document.getElementById('practiceName').value = data.practice_name;
-      if(data.npi) document.getElementById('practiceNPI').value = data.npi;
-      if(data.phone) document.getElementById('practicePhone').value = data.phone;
-      if(data.address) document.getElementById('practiceAddress').value = data.address;
-      if(data.city) document.getElementById('practiceCity').value = data.city;
-      if(data.zip) document.getElementById('practiceZip').value = data.zip;
+      if(data.npi)           document.getElementById('practiceNPI').value = data.npi;
+      if(data.phone)         document.getElementById('practicePhone').value = data.phone;
+      if(data.address)       document.getElementById('practiceAddress').value = data.address;
+      if(data.city)          document.getElementById('practiceCity').value = data.city;
+      if(data.zip)           document.getElementById('practiceZip').value = data.zip;
     } catch(e){}
   }
 
