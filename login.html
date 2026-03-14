@@ -306,8 +306,16 @@
         // Show SMS verification modal
         showSmsModal(phone);
       } else {
-        showAlert('Account created! Check your email to confirm your address.','success');
-        setTimeout(()=>window.location.href='/billing',1500);
+        // Do NOT redirect — require email verification first
+        localStorage.removeItem('cf_token');
+        document.querySelector('.card').innerHTML = `
+          <div style="text-align:center;padding:40px 20px;">
+            <div style="font-size:2rem;margin-bottom:16px;">📧</div>
+            <h2 style="color:#00c96b;font-size:1rem;letter-spacing:1px;margin-bottom:12px;">CHECK YOUR EMAIL</h2>
+            <p style="color:#8fa3c4;font-size:0.82rem;line-height:1.7;">We sent a confirmation link to<br/><strong style="color:#eef2ff;">${data.identifier}</strong></p>
+            <p style="color:#8fa3c4;font-size:0.78rem;margin-top:16px;">Click the link in the email to activate your account and continue to billing.</p>
+            <p style="color:#5a7299;font-size:0.72rem;margin-top:24px;">Didn't receive it? Check your spam folder or <a href="#" onclick="location.reload()" style="color:#00c96b;">try again</a>.</p>
+          </div>`;
       }
     } catch(e){showAlert('Connection error. Try again.');}
     finally{btn.disabled=false;btn.textContent='CREATE ACCOUNT →';}

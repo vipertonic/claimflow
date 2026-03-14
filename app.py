@@ -770,7 +770,7 @@ def send_confirmation_email(email: str, practice_name: str, confirm_token: str):
 def verify_email(token: str):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("SELECT id FROM practices WHERE email_confirm_token=?", (token,))
+    cursor.execute("SELECT id, email, practice_name FROM practices WHERE email_confirm_token=?", (token,))
     row = cursor.fetchone()
     if not row:
         conn.close()
@@ -778,9 +778,25 @@ def verify_email(token: str):
     cursor.execute("UPDATE practices SET email_verified=1, email_confirm_token=NULL WHERE id=?", (row[0],))
     conn.commit()
     conn.close()
-    # Redirect to billing page
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/billing?verified=1")
+    practice_id, email, practice_name = row
+    jwt_token = create_token(practice_id, email)
+    # Return HTML page that stores token and redirects to billing
+    from fastapi.responses import HTMLResponse
+    html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+    <title>Email Confirmed</title>
+    <style>body{{background:#04080f;color:#eef2ff;font-family:'DM Mono',monospace;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;}}
+    .box{{text-align:center;padding:40px;}}.icon{{font-size:3rem;margin-bottom:16px;}}.title{{color:#00c96b;font-size:1rem;letter-spacing:2px;margin-bottom:12px;}}
+    .sub{{color:#8fa3c4;font-size:0.82rem;line-height:1.7;}}</style></head>
+    <body><div class="box"><div class="icon">✓</div>
+    <div class="title">EMAIL CONFIRMED</div>
+    <p class="sub">Welcome to Claimflowpay, {practice_name}.<br/>Redirecting you to billing...</p>
+    </div>
+    <script>
+    localStorage.setItem('cf_token', JSON.stringify({{token:'{jwt_token}',expires:Date.now()+7200000}}));
+    localStorage.setItem('cf_practice', '{practice_name}');
+    setTimeout(()=>window.location.href='/billing', 1500);
+    </script></body></html>"""
+    return HTMLResponse(content=html)
 
 def send_sms_verification(phone: str):
     """Send SMS verification code via Twilio Verify"""
