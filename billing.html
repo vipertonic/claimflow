@@ -123,7 +123,7 @@
   <!-- ENTERPRISE -->
   <div class="plan-card" id="card-enterprise">
     <div class="plan-name">Enterprise</div>
-    <div class="plan-price">$2,999<span>/mo</span></div>
+    <div class="plan-price" style="letter-spacing:-0.02em;">$2,999<span>/mo</span></div>
     <div class="plan-desc">For large practices and health systems needing custom integrations.</div>
     <ul class="plan-features">
       <li>Everything in Practice</li>
@@ -150,7 +150,12 @@
 
 <script>
   const API = 'https://app.claimflowpay.com';
-  const token = localStorage.getItem('cf_token');
+  const _stored = localStorage.getItem('cf_token');
+  let token = null;
+  try {
+    const parsed = JSON.parse(_stored);
+    if(parsed && Date.now() < parsed.expires) token = parsed.token;
+  } catch(e) { token = _stored; }
 
   if (!token) window.location.href = '/';
 
